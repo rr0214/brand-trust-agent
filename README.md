@@ -110,4 +110,4 @@ trace attributes that flow automatically through multi-agent pipelines, turning 
 from an "observe and react" tool into a "prevent and enforce" platform.
 
 ---
-Built by Rebecca Riggs · Arize AI Senior PM Interview · 2026
+Built by Rebecca Riggs  · 2026
