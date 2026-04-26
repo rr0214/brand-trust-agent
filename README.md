@@ -1,7 +1,11 @@
 # Brand Trust Agent
 
 A two-agent pipeline for brand campaign generation, instrumented with **Arize AX**.
-Built to demonstrate multi-agent trust failure modes for the Arize AI observability platform.
+Built to demonstrate multi-agent trust failure modes and a four-pillar product proposal for the Arize AI observability platform.
+
+## Architecture
+
+![Architecture Diagram](architecture.svg)
 
 ## What It Does
 
