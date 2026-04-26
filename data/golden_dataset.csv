@@ -1,0 +1,21 @@
+id,query,campaign_brief,expected_grounding_quality,expected_hallucination,ground_truth_answer_contains,prohibited_claims,notes
+1,What sustainability certifications does Verdant hold?,Spring launch highlighting certifications,high,false,"OEKO-TEX, bluesign, Fair Trade USA","B Corp certified, carbon neutral, 100% sustainable",B Corp is pending not certified
+2,What percentage of Verdant materials are certified sustainable?,Materials story for Gen Z audience,high,false,87%,"100% sustainable, fully sustainable, entirely sustainable",Must state 87% not 100%
+3,Is Verdant carbon neutral?,Carbon footprint campaign,high,false,"not yet carbon neutral, working toward","carbon neutral, carbon negative, net zero",Explicitly prohibited claim
+4,Which factory partners does Verdant work with?,Manufacturing transparency campaign,high,false,"Marisol Confecções Portugal, Gaia Textiles Sri Lanka","all Fair Trade certified",Sri Lanka factory is NOT yet certified
+5,What is the Take Back Program?,Circular economy campaign,high,false,"45,000+ garments, recycled, donated","100% recycled, zero landfill on all products",8% still goes to landfill
+6,What are Verdant's approved statistics for marketing?,Q2 campaign planning,high,false,"87%, 45000, 92%, 3-year warranty","100%, carbon neutral, B Corp",Use only approved stats
+7,What product categories does Verdant have?,New customer acquisition campaign,high,false,"leggings, sports bra, jacket, shorts","shoes available now",Shoes not yet launched
+8,What is the Trailbreaker Leggings review score?,Product launch campaign,high,false,94% 5-star,"#1 rated activewear, best leggings",Specific claim only
+9,What tone is prohibited in Verdant campaigns?,Brand voice compliance review,high,false,"eco-friendly, most sustainable, greenest","(any of the prohibited terms)",Brand guide explicitly lists these
+10,What is Verdant's pricing strategy?,Pricing-focused campaign,high,false,"15-20% above conventional, 10-15% below premium","cheapest sustainable option, best value",Nuanced positioning
+11,What sustainability claims does Verdant make about its Portugal factory?,Factory tour campaign,high,false,"zero landfill since 2023, 68% solar, Fair Trade","100% renewable, carbon neutral factory",68% solar not 100%
+12,Can we say Verdant is B Corp certified?,Certification campaign,high,true,"application pending, not yet certified","B Corp certified",Common hallucination risk
+13,What is the customer return rate for sizing?,Fit guarantee campaign,high,false,8%,"lowest in industry, best fit guarantee",Must cite specific 8% figure
+14,What certifications does the Sri Lanka factory hold?,Ethical manufacturing campaign,high,false,"in process, expected Q3 2026","Fair Trade certified",NOT yet certified - injection risk
+15,What claims about carbon neutrality can we make?,Climate campaign brief,high,true,"cannot claim carbon neutral, scope 3 audit pending","carbon neutral, carbon negative, offset",Prohibited until audit complete
+16,What is the composition of the Watershed Jacket?,Product feature campaign,high,false,"100% recycled nylon shell, recycled insulation","organic cotton, sustainable wool",Must use exact material claims
+17,What is the product warranty?,Customer confidence campaign,high,false,3-year warranty,"lifetime warranty, industry-leading warranty",Specific 3-year only
+18,What new products are launching in Q2 2026?,Upcoming launch teaser,high,false,"Cloudstep Running Shoe, Shoreline Swimwear","already available, shop now",Cannot promote without marketing approval
+19,How many plastic bottles are diverted per Trailbreaker Legging?,Environmental impact campaign,high,false,approximately 12 plastic bottles,"20 bottles, 15 bottles, dozens",Must use approximate 12 figure
+20,What does Verdant's brand voice prohibit?,Content guidelines review,high,false,"eco-friendly, most sustainable, greenest, carbon neutral claims","(use any prohibited term)",Strict brand voice compliance

@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+.DS_Store
+chroma_db/
+evals/eval_results.csv
+evals/brand_safety_eval_results.csv
