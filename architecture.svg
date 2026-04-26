@@ -1,101 +1,159 @@
-<svg viewBox="0 0 860 580" xmlns="http://www.w3.org/2000/svg" role="img" font-family="Arial, sans-serif">
-  <title>Brand Trust Agent Architecture</title>
-  <desc>Two-agent pipeline showing trust propagation gap, prompt injection, and Arize AX observability</desc>
+<svg viewBox="0 0 880 720" xmlns="http://www.w3.org/2000/svg" role="img" font-family="Arial, sans-serif">
+  <title>Brand Trust Agent — Three-Agent Architecture</title>
+  <desc>Three-agent pipeline: Brand Research → Campaign Strategy → Creative Execution. Shows trust propagation gap, prompt injection, trust gate, and Arize AX observability.</desc>
 
-  <rect width="860" height="580" fill="#F8F9FC" rx="8"/>
-  <text x="430" y="34" text-anchor="middle" font-size="15" font-weight="700" fill="#0F2A5E">Brand Trust Agent — Architecture</text>
+  <rect width="880" height="720" fill="#F8F9FC" rx="8"/>
+  <text x="440" y="30" text-anchor="middle" font-size="14" font-weight="700" fill="#0F2A5E">Brand Trust Agent — Three-Agent Pipeline</text>
+  <text x="440" y="48" text-anchor="middle" font-size="10" fill="#6B7280">Brand-safe campaign generation · Instrumented with Arize AX</text>
 
   <!-- USER INPUT -->
-  <rect x="330" y="54" width="200" height="48" rx="8" fill="#0F2A5E"/>
-  <text x="430" y="74" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">User Input</text>
-  <text x="430" y="91" text-anchor="middle" font-size="10" fill="#CADCFC">Brand query + campaign brief</text>
+  <rect x="320" y="60" width="240" height="44" rx="8" fill="#0F2A5E"/>
+  <text x="440" y="78" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">User Input</text>
+  <text x="440" y="94" text-anchor="middle" font-size="9" fill="#CADCFC">Campaign brief + research question</text>
 
-  <line x1="430" y1="102" x2="430" y2="128" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="440" y1="104" x2="440" y2="126" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
 
   <!-- AGENT 1 -->
-  <rect x="60" y="128" width="740" height="140" rx="8" fill="#EFF6FF" stroke="#1A56DB" stroke-width="1.5"/>
-  <text x="430" y="150" text-anchor="middle" font-size="12" font-weight="700" fill="#1A56DB">Agent 1 — Brand Research</text>
+  <rect x="50" y="126" width="760" height="140" rx="8" fill="#EFF6FF" stroke="#1A56DB" stroke-width="1.5"/>
+  <text x="440" y="148" text-anchor="middle" font-size="12" font-weight="700" fill="#1A56DB">Agent 1 — Brand Research</text>
 
-  <rect x="88" y="162" width="160" height="88" rx="6" fill="#fff" stroke="#D1D5DB" stroke-width="1"/>
-  <text x="168" y="182" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">ChromaDB</text>
-  <text x="168" y="198" text-anchor="middle" font-size="10" fill="#6B7280">Vector store</text>
-  <text x="168" y="213" text-anchor="middle" font-size="10" fill="#6B7280">text-embedding-3-small</text>
-  <text x="168" y="228" text-anchor="middle" font-size="10" fill="#6B7280">Top-k retrieval</text>
+  <rect x="76" y="160" width="156" height="84" rx="6" fill="#fff" stroke="#D1D5DB" stroke-width="1"/>
+  <text x="154" y="178" text-anchor="middle" font-size="10" font-weight="700" fill="#1F2937">ChromaDB</text>
+  <text x="154" y="193" text-anchor="middle" font-size="9" fill="#6B7280">Vector store</text>
+  <text x="154" y="207" text-anchor="middle" font-size="9" fill="#6B7280">text-embedding-3-small</text>
+  <text x="154" y="221" text-anchor="middle" font-size="9" fill="#6B7280">Top-k retrieval</text>
 
-  <rect x="88" y="258" width="160" height="30" rx="4" fill="#FEE2E2" stroke="#DC2626" stroke-width="1"/>
-  <text x="168" y="270" text-anchor="middle" font-size="9" font-weight="700" fill="#DC2626">⚠ verdant_poisoned.txt</text>
-  <text x="168" y="282" text-anchor="middle" font-size="9" fill="#DC2626">Hidden injection instruction</text>
+  <rect x="76" y="248" width="156" height="28" rx="4" fill="#FEE2E2" stroke="#DC2626" stroke-width="1"/>
+  <text x="154" y="260" text-anchor="middle" font-size="8" font-weight="700" fill="#DC2626">⚠ verdant_poisoned.txt</text>
+  <text x="154" y="272" text-anchor="middle" font-size="8" fill="#DC2626">Hidden injection instruction</text>
 
-  <line x1="248" y1="206" x2="290" y2="206" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="232" y1="202" x2="272" y2="202" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
 
-  <rect x="290" y="162" width="160" height="88" rx="6" fill="#fff" stroke="#D1D5DB" stroke-width="1"/>
-  <text x="370" y="182" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">LLM Synthesis</text>
-  <text x="370" y="198" text-anchor="middle" font-size="10" fill="#6B7280">gpt-4o-mini</text>
-  <text x="370" y="213" text-anchor="middle" font-size="10" fill="#6B7280">Generates research answer</text>
-  <text x="370" y="228" text-anchor="middle" font-size="10" fill="#6B7280">from retrieved chunks</text>
+  <rect x="272" y="160" width="156" height="84" rx="6" fill="#fff" stroke="#D1D5DB" stroke-width="1"/>
+  <text x="350" y="178" text-anchor="middle" font-size="10" font-weight="700" fill="#1F2937">LLM Synthesis</text>
+  <text x="350" y="193" text-anchor="middle" font-size="9" fill="#6B7280">gpt-4o-mini</text>
+  <text x="350" y="207" text-anchor="middle" font-size="9" fill="#6B7280">Synthesizes research</text>
+  <text x="350" y="221" text-anchor="middle" font-size="9" fill="#6B7280">from retrieved chunks</text>
 
-  <line x1="450" y1="206" x2="492" y2="206" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="428" y1="202" x2="468" y2="202" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
 
-  <rect x="492" y="162" width="280" height="88" rx="6" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.5"/>
-  <text x="632" y="182" text-anchor="middle" font-size="11" font-weight="700" fill="#16A34A">TrustContext Output</text>
-  <text x="632" y="198" text-anchor="middle" font-size="10" fill="#1F2937">trust.grounding_score  0.0–1.0</text>
-  <text x="632" y="213" text-anchor="middle" font-size="10" fill="#1F2937">trust.injection_risk  NONE | HIGH</text>
-  <text x="632" y="228" text-anchor="middle" font-size="10" fill="#1F2937">trust.upstream_span_id  →</text>
+  <rect x="468" y="160" width="316" height="84" rx="6" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.5"/>
+  <text x="626" y="178" text-anchor="middle" font-size="10" font-weight="700" fill="#16A34A">TrustContext Output</text>
+  <text x="626" y="193" text-anchor="middle" font-size="9" fill="#1F2937">trust.grounding_score  0.0–1.0</text>
+  <text x="626" y="207" text-anchor="middle" font-size="9" fill="#1F2937">trust.injection_risk  NONE | HIGH</text>
+  <text x="626" y="221" text-anchor="middle" font-size="9" fill="#1F2937">trust.upstream_span_id  →</text>
 
-  <!-- TRUST GAP -->
-  <line x1="60" y1="298" x2="800" y2="298" stroke="#DC2626" stroke-width="1.5" stroke-dasharray="6,4"/>
-  <rect x="290" y="303" width="280" height="24" rx="4" fill="#FEE2E2"/>
-  <text x="430" y="319" text-anchor="middle" font-size="10" font-weight="700" fill="#DC2626">⬇ TRUST GAP — does Agent 2 see the grounding score?</text>
+  <!-- TRUST GAP 1→2 -->
+  <line x1="50" y1="282" x2="810" y2="282" stroke="#DC2626" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <rect x="296" y="286" width="288" height="22" rx="4" fill="#FEE2E2"/>
+  <text x="440" y="301" text-anchor="middle" font-size="9" font-weight="700" fill="#DC2626">⬇ TRUST GAP — does Agent 2 see the grounding score?</text>
 
-  <line x1="430" y1="327" x2="430" y2="355" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="440" y1="308" x2="440" y2="330" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
 
   <!-- AGENT 2 -->
-  <rect x="60" y="355" width="740" height="110" rx="8" fill="#FFF7ED" stroke="#D97706" stroke-width="1.5"/>
-  <text x="430" y="377" text-anchor="middle" font-size="12" font-weight="700" fill="#D97706">Agent 2 — Campaign Strategy</text>
+  <rect x="50" y="330" width="760" height="120" rx="8" fill="#FFF7ED" stroke="#D97706" stroke-width="1.5"/>
+  <text x="440" y="352" text-anchor="middle" font-size="12" font-weight="700" fill="#D97706">Agent 2 — Campaign Strategy</text>
 
-  <rect x="88" y="388" width="280" height="64" rx="6" fill="#FEE2E2" stroke="#DC2626" stroke-width="1"/>
-  <text x="228" y="407" text-anchor="middle" font-size="11" font-weight="700" fill="#DC2626">Trust-Unaware (failure mode)</text>
-  <text x="228" y="423" text-anchor="middle" font-size="10" fill="#6B7280">Acts on Agent 1 output blindly</text>
-  <text x="228" y="438" text-anchor="middle" font-size="10" fill="#6B7280">No grounding score inherited</text>
+  <rect x="76" y="364" width="220" height="72" rx="6" fill="#FEE2E2" stroke="#DC2626" stroke-width="1"/>
+  <text x="186" y="382" text-anchor="middle" font-size="10" font-weight="700" fill="#DC2626">Trust-Unaware (failure)</text>
+  <text x="186" y="397" text-anchor="middle" font-size="9" fill="#6B7280">No grounding score inherited</text>
+  <text x="186" y="411" text-anchor="middle" font-size="9" fill="#6B7280">Confident claims from thin evidence</text>
 
-  <rect x="492" y="388" width="280" height="64" rx="6" fill="#DCFCE7" stroke="#16A34A" stroke-width="1"/>
-  <text x="632" y="407" text-anchor="middle" font-size="11" font-weight="700" fill="#16A34A">Trust-Aware (the fix)</text>
-  <text x="632" y="423" text-anchor="middle" font-size="10" fill="#6B7280">Sees grounding score + risk</text>
-  <text x="632" y="438" text-anchor="middle" font-size="10" fill="#6B7280">Hedges or halts on low trust</text>
+  <rect x="318" y="364" width="200" height="72" rx="6" fill="#fff" stroke="#D1D5DB" stroke-width="1"/>
+  <text x="418" y="382" text-anchor="middle" font-size="10" font-weight="700" fill="#1F2937">check_brand_policy()</text>
+  <text x="418" y="397" text-anchor="middle" font-size="9" fill="#6B7280">Tool call per claim</text>
+  <text x="418" y="411" text-anchor="middle" font-size="9" fill="#6B7280">APPROVED | PROHIBITED</text>
+  <text x="418" y="425" text-anchor="middle" font-size="9" fill="#6B7280">TOOL span in Arize AX</text>
 
-  <line x1="430" y1="465" x2="430" y2="488" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="540" y="364" width="244" height="72" rx="6" fill="#DCFCE7" stroke="#16A34A" stroke-width="1"/>
+  <text x="662" y="382" text-anchor="middle" font-size="10" font-weight="700" fill="#16A34A">Trust-Aware (the fix)</text>
+  <text x="662" y="397" text-anchor="middle" font-size="9" fill="#6B7280">Sees grounding score + risk</text>
+  <text x="662" y="411" text-anchor="middle" font-size="9" fill="#6B7280">Hedges or halts on low trust</text>
+
+  <!-- TRUST GATE 2→3 -->
+  <line x1="440" y1="450" x2="440" y2="470" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="296" y="456" width="288" height="22" rx="4" fill="#EDE9FE"/>
+  <text x="440" y="471" text-anchor="middle" font-size="9" font-weight="700" fill="#7C3AED">🛡️ TRUST GATE — halt if hallucination or score &lt; 0.30</text>
+
+  <line x1="440" y1="478" x2="440" y2="498" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- AGENT 3 -->
+  <rect x="50" y="498" width="760" height="130" rx="8" fill="#F5F3FF" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="440" y="520" text-anchor="middle" font-size="12" font-weight="700" fill="#7C3AED">Agent 3 — Creative Execution</text>
+
+  <rect x="76" y="532" width="180" height="82" rx="6" fill="#fff" stroke="#D1D5DB" stroke-width="1"/>
+  <text x="166" y="549" text-anchor="middle" font-size="10" font-weight="700" fill="#1F2937">Prompt Engineering</text>
+  <text x="166" y="564" text-anchor="middle" font-size="9" fill="#6B7280">gpt-4o-mini</text>
+  <text x="166" y="578" text-anchor="middle" font-size="9" fill="#6B7280">Brand-safe video prompt</text>
+  <text x="166" y="592" text-anchor="middle" font-size="9" fill="#6B7280">Visual guidelines enforced</text>
+
+  <line x1="256" y1="573" x2="292" y2="573" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="292" y="532" width="196" height="82" rx="6" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="390" y="549" text-anchor="middle" font-size="10" font-weight="700" fill="#7C3AED">Veo 2 Video Generation</text>
+  <text x="390" y="564" text-anchor="middle" font-size="9" fill="#1F2937">veo-2.0-generate-001</text>
+  <text x="390" y="578" text-anchor="middle" font-size="9" fill="#1F2937">5-second social video</text>
+  <text x="390" y="592" text-anchor="middle" font-size="9" fill="#6B7280">TOOL span in Arize AX</text>
+
+  <line x1="488" y1="573" x2="524" y2="573" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="524" y="532" width="260" height="82" rx="6" fill="#DCFCE7" stroke="#16A34A" stroke-width="1"/>
+  <text x="654" y="549" text-anchor="middle" font-size="10" font-weight="700" fill="#16A34A">Creative Package</text>
+  <text x="654" y="564" text-anchor="middle" font-size="9" fill="#1F2937">Social video · Caption · Hashtags</text>
+  <text x="654" y="578" text-anchor="middle" font-size="9" fill="#6B7280">OR: Pipeline halted (no assets)</text>
+  <text x="654" y="592" text-anchor="middle" font-size="9" fill="#6B7280">trust.pipeline_halted in span</text>
+
+  <line x1="440" y1="628" x2="440" y2="648" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
 
   <!-- PRESCRIPTIVE GOVERNANCE -->
-  <rect x="180" y="488" width="500" height="52" rx="8" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
-  <text x="430" y="508" text-anchor="middle" font-size="11" font-weight="700" fill="#7C3AED">Prescriptive Governance (Pillar 4)</text>
-  <text x="430" y="526" text-anchor="middle" font-size="10" fill="#1F2937">Halt · Escalate · Quarantine · Audit log → SOC 2 / EU AI Act</text>
+  <rect x="180" y="648" width="520" height="48" rx="8" fill="#EDE9FE" stroke="#7C3AED" stroke-width="1.5"/>
+  <text x="440" y="666" text-anchor="middle" font-size="11" font-weight="700" fill="#7C3AED">Prescriptive Governance (Pillar 4)</text>
+  <text x="440" y="684" text-anchor="middle" font-size="9" fill="#1F2937">Halt · Escalate · Quarantine · Audit log → SOC 2 / EU AI Act / NIST AI RMF</text>
 
   <!-- ARIZE AX SIDEBAR -->
-  <rect x="780" y="128" width="68" height="412" rx="8" fill="#0F2A5E" opacity="0.92"/>
-  <text x="814" y="310" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" transform="rotate(-90,814,310)">Arize AX — OpenInference Spans</text>
-  <rect x="790" y="148" width="48" height="18" rx="3" fill="#1A56DB"/>
-  <text x="814" y="161" text-anchor="middle" font-size="8" fill="#fff">RETRIEVER</text>
-  <rect x="790" y="172" width="48" height="18" rx="3" fill="#1A56DB"/>
-  <text x="814" y="185" text-anchor="middle" font-size="8" fill="#fff">LLM</text>
-  <rect x="790" y="196" width="48" height="18" rx="3" fill="#16A34A"/>
-  <text x="814" y="209" text-anchor="middle" font-size="8" fill="#fff">AGENT</text>
-  <rect x="790" y="370" width="48" height="18" rx="3" fill="#D97706"/>
-  <text x="814" y="383" text-anchor="middle" font-size="8" fill="#fff">AGENT</text>
-  <rect x="790" y="500" width="48" height="18" rx="3" fill="#7C3AED"/>
-  <text x="814" y="513" text-anchor="middle" font-size="8" fill="#fff">GOVERN</text>
+  <rect x="820" y="126" width="52" height="570" rx="8" fill="#0F2A5E" opacity="0.92"/>
+  <text x="846" y="418" text-anchor="middle" font-size="9" font-weight="700" fill="#fff" transform="rotate(-90,846,418)">Arize AX — OpenInference Spans</text>
+  <rect x="828" y="144" width="36" height="16" rx="3" fill="#1A56DB"/>
+  <text x="846" y="155" text-anchor="middle" font-size="7" fill="#fff">RETRIEVER</text>
+  <rect x="828" y="164" width="36" height="16" rx="3" fill="#1A56DB"/>
+  <text x="846" y="175" text-anchor="middle" font-size="7" fill="#fff">LLM</text>
+  <rect x="828" y="184" width="36" height="16" rx="3" fill="#16A34A"/>
+  <text x="846" y="195" text-anchor="middle" font-size="7" fill="#fff">AGENT</text>
 
-  <line x1="800" y1="206" x2="780" y2="206" stroke="#1A56DB" stroke-width="1" stroke-dasharray="4,3"/>
-  <line x1="800" y1="415" x2="780" y2="415" stroke="#D97706" stroke-width="1" stroke-dasharray="4,3"/>
+  <rect x="828" y="348" width="36" height="16" rx="3" fill="#D97706"/>
+  <text x="846" y="359" text-anchor="middle" font-size="7" fill="#fff">AGENT</text>
+  <rect x="828" y="368" width="36" height="16" rx="3" fill="#D97706"/>
+  <text x="846" y="379" text-anchor="middle" font-size="7" fill="#fff">LLM</text>
+  <rect x="828" y="388" width="36" height="16" rx="3" fill="#D97706"/>
+  <text x="846" y="399" text-anchor="middle" font-size="7" fill="#fff">TOOL</text>
+
+  <rect x="828" y="510" width="36" height="16" rx="3" fill="#7C3AED"/>
+  <text x="846" y="521" text-anchor="middle" font-size="7" fill="#fff">AGENT</text>
+  <rect x="828" y="530" width="36" height="16" rx="3" fill="#7C3AED"/>
+  <text x="846" y="541" text-anchor="middle" font-size="7" fill="#fff">LLM</text>
+  <rect x="828" y="550" width="36" height="16" rx="3" fill="#7C3AED"/>
+  <text x="846" y="561" text-anchor="middle" font-size="7" fill="#fff">TOOL (Veo)</text>
+  <rect x="828" y="572" width="36" height="16" rx="3" fill="#7C3AED"/>
+  <text x="846" y="583" text-anchor="middle" font-size="7" fill="#fff">LLM</text>
+
+  <rect x="828" y="658" width="36" height="16" rx="3" fill="#991B1B"/>
+  <text x="846" y="669" text-anchor="middle" font-size="7" fill="#fff">GOVERN</text>
+
+  <line x1="820" y1="202" x2="810" y2="202" stroke="#1A56DB" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="820" y1="400" x2="810" y2="400" stroke="#D97706" stroke-width="1" stroke-dasharray="3,2"/>
+  <line x1="820" y1="573" x2="810" y2="573" stroke="#7C3AED" stroke-width="1" stroke-dasharray="3,2"/>
 
   <!-- Legend -->
-  <rect x="60" y="550" width="12" height="10" rx="2" fill="#16A34A"/>
-  <text x="78" y="560" font-size="9" fill="#6B7280">Trust-aware / safe</text>
-  <rect x="160" y="550" width="12" height="10" rx="2" fill="#DC2626"/>
-  <text x="178" y="560" font-size="9" fill="#6B7280">Failure / injection</text>
-  <rect x="260" y="550" width="12" height="10" rx="2" fill="#7C3AED"/>
-  <text x="278" y="560" font-size="9" fill="#6B7280">Governance</text>
-  <rect x="340" y="550" width="12" height="10" rx="2" fill="#1A56DB"/>
-  <text x="358" y="560" font-size="9" fill="#6B7280">Arize AX span</text>
+  <rect x="50" y="700" width="10" height="8" rx="2" fill="#16A34A"/>
+  <text x="65" y="708" font-size="8" fill="#6B7280">Trust-safe</text>
+  <rect x="130" y="700" width="10" height="8" rx="2" fill="#DC2626"/>
+  <text x="145" y="708" font-size="8" fill="#6B7280">Failure / injection</text>
+  <rect x="230" y="700" width="10" height="8" rx="2" fill="#7C3AED"/>
+  <text x="245" y="708" font-size="8" fill="#6B7280">Trust gate / governance</text>
+  <rect x="360" y="700" width="10" height="8" rx="2" fill="#1A56DB"/>
+  <text x="375" y="708" font-size="8" fill="#6B7280">Arize AX span</text>
+  <rect x="440" y="700" width="10" height="8" rx="2" fill="#D97706"/>
+  <text x="455" y="708" font-size="8" fill="#6B7280">Agent 2 span</text>
 
   <defs>
     <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">

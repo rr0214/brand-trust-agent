@@ -1,32 +1,34 @@
 """
-Brand Trust Agent — Streamlit Demo
+Brand Trust Agent — Streamlit App
 ====================================
-A two-agent pipeline for brand campaign generation, instrumented with Arize AX.
-Demonstrates three multi-agent trust failures:
-  1. Trust Propagation: low-confidence research silently feeds confident campaigns
-  2. Prompt Injection:  adversarial instructions in retrieved docs manipulate output
-  3. The Fix:          trust-aware mode shows how propagated signals prevent both
+A three-agent pipeline that keeps brand campaigns accurate, safe, and on-brand.
+Instrumented with Arize AX for full observability.
+
+Primary use: brand teams use this to generate campaign strategies + creative assets
+             with built-in brand safety guardrails.
+
+Demo mode:  shows trust failure scenarios for the Arize AX interview — toggleable
+            via a small control in the sidebar.
 
 Run: streamlit run app.py
 """
 
 import os
-import sys
 import time
+import base64
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load .env before any imports that need API keys
 load_dotenv()
 
 import streamlit as st
 
 # ---------------------------------------------------------------------------
-# Page config (must be first Streamlit call)
+# Page config
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Brand Trust Agent | Arize AX Demo",
-    page_icon="🛡️",
+    page_title="Verdant Campaign Studio",
+    page_icon="🌿",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -36,14 +38,12 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 @st.cache_resource
 def init_tracing():
-    """Initialize Arize AX tracing. Cached so it only runs once."""
     try:
         from instrumentation.arize_setup import setup_arize_tracing
         setup_arize_tracing()
         return True, None
     except Exception as e:
         return False, str(e)
-
 
 tracing_ok, tracing_error = init_tracing()
 
@@ -52,285 +52,409 @@ tracing_ok, tracing_error = init_tracing()
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
-.trust-high   { color: #22c55e; font-weight: 600; }
-.trust-medium { color: #f59e0b; font-weight: 600; }
-.trust-low    { color: #ef4444; font-weight: 600; }
-.agent-box    { background: #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
-.failure-badge { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
-.success-badge { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
-.warn-badge   { background: #fef9c3; color: #713f12; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
+/* Brand palette */
+:root {
+  --verdant-green: #2d6a4f;
+  --verdant-light: #40916c;
+  --verdant-bg: #d8f3dc;
+  --trust-high: #22c55e;
+  --trust-med: #f59e0b;
+  --trust-low: #ef4444;
+}
+.trust-high   { color: #22c55e; font-weight: 700; }
+.trust-medium { color: #f59e0b; font-weight: 700; }
+.trust-low    { color: #ef4444; font-weight: 700; }
+.agent-header { font-size: 1.05rem; font-weight: 700; margin-bottom: 4px; }
+.badge-success { background: #dcfce7; color: #166534; padding: 2px 10px; border-radius: 12px; font-size: 0.78em; font-weight: 700; }
+.badge-warn    { background: #fef9c3; color: #713f12; padding: 2px 10px; border-radius: 12px; font-size: 0.78em; font-weight: 700; }
+.badge-danger  { background: #fee2e2; color: #991b1b; padding: 2px 10px; border-radius: 12px; font-size: 0.78em; font-weight: 700; }
+.badge-halted  { background: #f3e8ff; color: #6b21a8; padding: 2px 10px; border-radius: 12px; font-size: 0.78em; font-weight: 700; }
+.pipeline-step { border-left: 3px solid #40916c; padding-left: 14px; margin-bottom: 8px; }
+.halted-box    { background: #fdf4ff; border: 1px solid #c084fc; border-radius: 8px; padding: 16px; margin-top: 8px; }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Header
 # ---------------------------------------------------------------------------
-col_logo, col_title = st.columns([1, 8])
+col_logo, col_title, col_status = st.columns([1, 7, 2])
 with col_logo:
-    st.markdown("## 🛡️")
+    st.markdown("## 🌿")
 with col_title:
-    st.markdown("## Brand Trust Agent")
-    st.caption("Multi-agent pipeline · Instrumented with Arize AX · Built to demonstrate trust failure modes")
-
-if tracing_ok:
-    st.success("✅ Arize AX tracing active — traces streaming to your project", icon="📡")
-else:
-    st.warning(f"⚠️ Arize tracing not initialized: {tracing_error}. Set ARIZE_SPACE_ID and ARIZE_API_KEY in .env", icon="📡")
+    st.markdown("## Verdant Campaign Studio")
+    st.caption("Brand-safe campaign generation · Powered by three trust-aware AI agents")
+with col_status:
+    if tracing_ok:
+        st.success("📡 Arize AX live", icon="✅")
+    else:
+        st.warning("Arize offline", icon="⚠️")
 
 st.divider()
 
 # ---------------------------------------------------------------------------
-# Sidebar — controls
+# Sidebar
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("### 🎛️ Demo Controls")
-    st.caption("Configure the failure modes to demonstrate")
+    st.markdown("### 🌿 Campaign Brief")
 
-    st.markdown("---")
-    st.markdown("**Campaign Input**")
-    research_query = st.text_input(
-        "Research question for Agent 1",
-        value="What sustainability claims and certifications can we use in a spring campaign?",
-        help="Agent 1 will RAG over Verdant brand documents to answer this."
-    )
     campaign_brief = st.text_area(
-        "Campaign brief for Agent 2",
-        value="Spring launch targeting Gen Z runners. Lean into sustainability story and performance credentials.",
-        height=100,
-        help="Agent 2 takes Agent 1's research + this brief to generate campaign strategy."
+        "What's the campaign goal?",
+        value="Spring launch targeting Gen Z runners. Lead with sustainability story and performance credentials.",
+        height=110,
+        help="Agent 2 takes research + this brief to generate the campaign strategy."
+    )
+
+    research_query = st.text_input(
+        "Brand research question",
+        value="What sustainability claims and certifications can we use in a spring campaign?",
+        help="Agent 1 will RAG over Verdant brand documents to answer this before building the strategy."
     )
 
     st.markdown("---")
-    st.markdown("**Failure Mode Toggles**")
 
-    failure_mode = st.radio(
-        "Select scenario",
-        options=[
-            "✅ Normal (no failures)",
-            "⚠️ Trust Propagation Failure",
-            "🔴 Prompt Injection Attack",
-            "🛡️ Trust-Aware Mode (the fix)",
-        ],
-        index=0,
-        help="Each mode demonstrates a different multi-agent trust failure — all visible in Arize AX traces."
-    )
+    # ── Demo Mode ────────────────────────────────────────────────────────────
+    # Secondary toggle — shown for interview purposes. In production this
+    # section would be hidden or restricted to an admin view.
+    with st.expander("🔬 Demo Mode (Trust Failure Scenarios)", expanded=False):
+        st.caption("Toggle failure modes to demonstrate how Arize AX surfaces trust gaps in multi-agent pipelines.")
+        failure_mode = st.radio(
+            "Scenario",
+            options=[
+                "✅ Normal",
+                "⚠️ Trust Propagation Failure",
+                "🔴 Prompt Injection Attack",
+                "🛡️ Trust-Aware Mode (the fix)",
+            ],
+            index=0,
+        )
+
+        FAILURE_CONFIGS = {
+            "✅ Normal": {
+                "include_poisoned": False, "simulate_low_confidence": False, "trust_aware": True,
+                "badge": "success",
+                "desc": "Clean run — high-quality retrieval, grounded strategy, creative package delivered.",
+            },
+            "⚠️ Trust Propagation Failure": {
+                "include_poisoned": False, "simulate_low_confidence": True, "trust_aware": False,
+                "badge": "warn",
+                "desc": "Agent 1 retrieves thin evidence (low grounding). Agent 2 is never told — makes confident claims from weak sources. Agent 3 will halt if the strategy is bad enough.",
+            },
+            "🔴 Prompt Injection Attack": {
+                "include_poisoned": True, "simulate_low_confidence": False, "trust_aware": False,
+                "badge": "danger",
+                "desc": "Adversarial instructions hidden in a brand doc hijack Agent 2's output — false claims, competitor reference. Agent 3 trust gate fires.",
+            },
+            "🛡️ Trust-Aware Mode (the fix)": {
+                "include_poisoned": True, "simulate_low_confidence": False, "trust_aware": True,
+                "badge": "success",
+                "desc": "Grounding score + injection risk propagate from Agent 1 → 2 → 3. Low trust triggers hedged output. Injection triggers full halt. This is what Arize Sentinel enforces natively.",
+            },
+        }
+        config = FAILURE_CONFIGS[failure_mode]
+        badge_map = {
+            "success": '<span class="badge-success">✓ Expected</span>',
+            "warn":    '<span class="badge-warn">⚠ Silent failure</span>',
+            "danger":  '<span class="badge-danger">✗ Security failure</span>',
+        }
+        st.markdown(f"{badge_map[config['badge']]} — {config['desc']}", unsafe_allow_html=True)
+
+    # No Demo Mode active → use normal config
+    if "config" not in dir():
+        config = {
+            "include_poisoned": False, "simulate_low_confidence": False, "trust_aware": True,
+        }
 
     st.markdown("---")
-    st.markdown("**Arize AX**")
     arize_space_id = os.environ.get("ARIZE_SPACE_ID", "")
-    arize_project_url = f"https://app.arize.com/organizations/{arize_space_id}" if arize_space_id else "https://app.arize.com"
-    st.markdown(f"[Open Arize AX Dashboard ↗]({arize_project_url})")
-    st.caption("Find your traces under Projects → brand-trust-agent → Traces")
-
+    arize_url = f"https://app.arize.com/organizations/{arize_space_id}" if arize_space_id else "https://app.arize.com"
+    st.markdown(f"[Open Arize AX ↗]({arize_url})")
+    st.caption("Projects → brand-trust-agent → Traces")
     st.markdown("---")
-    run_btn = st.button("▶ Run Pipeline", type="primary", use_container_width=True)
+    run_btn = st.button("▶  Generate Campaign", type="primary", use_container_width=True)
 
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
-tab_pipeline, tab_index = st.tabs(["▶  Run Pipeline", "📚  Index Explorer"])
+tab_campaign, tab_index = st.tabs(["🌿  Campaign", "📚  Index Explorer"])
 
 # ---------------------------------------------------------------------------
-# Failure mode explainer
+# CAMPAIGN TAB
 # ---------------------------------------------------------------------------
-FAILURE_EXPLANATIONS = {
-    "✅ Normal (no failures)": {
-        "desc": "Both agents run normally. Agent 1 retrieves high-quality brand docs. Agent 2 generates an accurate, grounded campaign.",
-        "config": {"include_poisoned": False, "simulate_low_confidence": False, "trust_aware": True},
-        "badge": "success",
-    },
-    "⚠️ Trust Propagation Failure": {
-        "desc": "Agent 1 retrieves only 1 weak chunk (simulating a retrieval miss). Grounding score is low — but Agent 2 is never told. It generates confident campaign copy from thin evidence. This is the most common silent failure in multi-agent pipelines.",
-        "config": {"include_poisoned": False, "simulate_low_confidence": True, "trust_aware": False},
-        "badge": "warn",
-    },
-    "🔴 Prompt Injection Attack": {
-        "desc": "A malicious instruction is hidden inside a brand document. When retrieved, it overrides Agent 2's system prompt — causing it to make false claims (carbon neutral, B Corp certified) and recommend a competitor. Arize captures the trace but doesn't detect the injection pattern in real-time.",
-        "config": {"include_poisoned": True, "simulate_low_confidence": False, "trust_aware": False},
-        "badge": "failure",
-    },
-    "🛡️ Trust-Aware Mode (the fix)": {
-        "desc": "Agent 2 receives the grounding score AND injection risk flag from Agent 1. Low grounding triggers hedged language and a human review flag. Injection risk triggers a guardrail. This is the behavior Arize Sentinel would enforce natively — without requiring prompt engineering in every agent.",
-        "config": {"include_poisoned": True, "simulate_low_confidence": False, "trust_aware": True},
-        "badge": "success",
-    },
-}
+with tab_campaign:
 
-mode_info = FAILURE_EXPLANATIONS[failure_mode]
-config = mode_info["config"]
-
-badge_html = {
-    "success": '<span class="success-badge">✓ Expected behavior</span>',
-    "warn": '<span class="warn-badge">⚠ Silent failure</span>',
-    "failure": '<span class="failure-badge">✗ Security failure</span>',
-}
-
-with tab_pipeline:
-  st.markdown(f"**Scenario:** {failure_mode}   {badge_html[mode_info['badge']]}", unsafe_allow_html=True)
-  st.info(mode_info["desc"])
-
-  # ── Pipeline architecture diagram ──────────────────────────────────────
-  with st.expander("📊 Pipeline Architecture", expanded=False):
-      st.markdown("""
+    # ── Pipeline overview ──────────────────────────────────────────────────
+    with st.expander("📊 How the pipeline works", expanded=False):
+        st.markdown("""
 ```
-User Query
-    │
-    ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  AGENT 1: Brand Research Agent                                  │
-│  • Embeds query → ChromaDB vector search → retrieve top-k docs  │
-│  • GPT-4o-mini synthesizes research answer                       │
-│  • Calculates grounding_score (0.0–1.0)                         │
-│  • Tags injection_risk if poisoned doc retrieved                 │
-│  ──────────────────────────────────────────────────────────── ─ │
-│  Output: ResearchResult { answer, grounding_score, sources }    │
-└─────────────────────────┬───────────────────────────────────────┘
-                          │  ← grounding_score propagated? (the gap)
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  AGENT 2: Campaign Strategy Agent                               │
-│  • Receives research + campaign brief                           │
-│  • trust_aware=True  → sees grounding score, calibrates output  │
-│  • trust_aware=False → operates blind → FAILURE MODE           │
-│  • GPT-4o-mini generates campaign JSON                          │
-│  ─────────────────────────────────────────────────────────────  │
-│  Output: CampaignStrategy { concept, tagline, messages, risks } │
-└─────────────────────────────────────────────────────────────────┘
-                          │
-                          ▼
-             Arize AX: Both spans linked
-             Agent Visibility shows the flow
-             ← gap: no native trust propagation
+Campaign Brief + Research Question
+        │
+        ▼
+┌──────────────────────────────────────────────────────────────┐
+│  AGENT 1 — Brand Research                                    │
+│  ChromaDB vector search → GPT-4o-mini synthesis             │
+│  Output: answer + grounding_score (0–1) + injection_risk    │
+└──────────────────────────────┬───────────────────────────────┘
+                               │ trust signals propagated?  ← THE GAP
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│  AGENT 2 — Campaign Strategy                                 │
+│  GPT-4o-mini + check_brand_policy() tool                    │
+│  Validates every claim before use                            │
+│  Output: concept · tagline · key messages · risk flags      │
+└──────────────────────────────┬───────────────────────────────┘
+                               │ hallucination_detected? → HALT
+                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│  AGENT 3 — Creative Execution              [TRUST GATE 🛡️]   │
+│  GPT-4o-mini builds brand-safe video prompt                 │
+│  Veo 2 generates 5-second social video                      │
+│  GPT-4o-mini writes Instagram/TikTok caption + hashtags     │
+│  Output: video · caption · hashtags  OR  pipeline halted    │
+└──────────────────────────────────────────────────────────────┘
+        │
+        ▼
+  Arize AX — every span linked, trust metadata propagated
+  Agent Visibility shows the full 3-agent flow
 ```
-**The product proposal:** Arize Sentinel adds a Trust Layer between agents —
-propagating grounding scores, injection risk, and confidence metadata automatically,
-without requiring changes to each agent's prompt.
-      """)
+**The Arize Sentinel proposal** adds a native Trust Layer: grounding scores,
+injection risk, and confidence signals flow automatically between agents —
+turning Arize from observe-and-react into prevent-and-enforce.
+        """)
 
-  st.divider()
+    if not run_btn:
+        st.markdown("""
+        <div style='text-align:center; padding: 60px 0; color: #94a3b8;'>
+            <div style='font-size: 2.5rem; margin-bottom: 12px;'>🌿</div>
+            <div style='font-size: 1.1rem; font-weight: 600; margin-bottom: 8px;'>Ready to generate your campaign</div>
+            <div>Fill in your campaign brief in the sidebar, then click <strong>Generate Campaign</strong></div>
+        </div>
+        """, unsafe_allow_html=True)
 
-  # ── Run the pipeline ───────────────────────────────────────────────────
-  if run_btn:
-      from agents.brand_research_agent import run_brand_research
-      from agents.campaign_strategy_agent import run_campaign_strategy
+    if run_btn:
+        from agents.brand_research_agent import run_brand_research
+        from agents.campaign_strategy_agent import run_campaign_strategy
+        from agents.creative_execution_agent import run_creative_execution
 
-      col1, col2 = st.columns(2)
+        # ──────────────────────────────────────────────────────────────────
+        # AGENT 1
+        # ──────────────────────────────────────────────────────────────────
+        st.markdown("### 🔍 Agent 1 — Brand Research")
+        with st.spinner("Researching Verdant brand documents..."):
+            t0 = time.time()
+            research = run_brand_research(
+                query=research_query,
+                include_poisoned=config["include_poisoned"],
+                simulate_low_confidence=config["simulate_low_confidence"],
+            )
+            t1 = time.time()
 
-      with col1:
-          st.markdown("### 🔍 Agent 1: Brand Research")
-          with st.spinner("Retrieving and synthesizing brand documents..."):
-              t0 = time.time()
-              research = run_brand_research(
-                  query=research_query,
-                  include_poisoned=config["include_poisoned"],
-                  simulate_low_confidence=config["simulate_low_confidence"],
-              )
-              t1 = time.time()
+        gs = research.grounding_score
+        if gs >= 0.70:
+            score_class, score_label = "trust-high", "HIGH"
+        elif gs >= 0.50:
+            score_class, score_label = "trust-medium", "MEDIUM"
+        else:
+            score_class, score_label = "trust-low", "LOW"
 
-          gs = research.grounding_score
-          if gs >= 0.70:
-              score_class, score_label = "trust-high", "HIGH"
-          elif gs >= 0.50:
-              score_class, score_label = "trust-medium", "MEDIUM"
-          else:
-              score_class, score_label = "trust-low", "LOW"
+        col_a1, col_a2 = st.columns([2, 1])
+        with col_a1:
+            st.markdown(f"<div class='pipeline-step'><strong>Research answer:</strong><br>{research.answer}</div>", unsafe_allow_html=True)
+            st.caption(f"Sources: {', '.join(research.sources)}")
+        with col_a2:
+            st.markdown(f"**Grounding score:** <span class='{score_class}'>{gs:.2f} ({score_label})</span>", unsafe_allow_html=True)
+            meta = research.confidence_metadata
+            st.metric("Chunks retrieved", meta.get("n_chunks_retrieved", 0))
+            inj = meta.get("injection_risk", "none").upper()
+            st.metric("Injection risk", inj)
+            st.caption(f"{(t1-t0):.1f}s · Arize span: `brand-research-agent`")
 
-          st.markdown(f"**Grounding Score:** <span class='{score_class}'>{gs:.2f} ({score_label})</span>", unsafe_allow_html=True)
+        if config["include_poisoned"]:
+            st.error("🔴 Injection document was included in retrieval — adversarial instructions may be in retrieved context.")
+        if config["simulate_low_confidence"] and gs < 0.6:
+            st.warning(f"⚠️ Grounding score {gs:.2f} is below threshold. In trust-aware mode, Agent 2 would be notified. In failure mode — it won't.")
 
-          meta = research.confidence_metadata
-          col_m1, col_m2, col_m3 = st.columns(3)
-          col_m1.metric("Chunks Retrieved", meta.get("n_chunks_retrieved", 0))
-          col_m2.metric("Avg Relevance", f"{meta.get('avg_relevance', 0):.2f}")
-          col_m3.metric("Injection Risk", meta.get("injection_risk", "—").upper())
+        st.divider()
 
-          st.markdown("**Research Output:**")
-          st.markdown(f"> {research.answer}")
-          st.caption(f"Sources: {', '.join(research.sources)} · {(t1-t0):.1f}s")
+        # ──────────────────────────────────────────────────────────────────
+        # AGENT 2
+        # ──────────────────────────────────────────────────────────────────
+        st.markdown("### 📣 Agent 2 — Campaign Strategy")
+        with st.spinner("Generating campaign strategy and validating brand claims..."):
+            t2 = time.time()
+            strategy = run_campaign_strategy(
+                research=research,
+                campaign_brief=campaign_brief,
+                trust_aware=config["trust_aware"],
+            )
+            t3 = time.time()
 
-          if config["simulate_low_confidence"] and gs < 0.6:
-              st.error("⚠️ Low grounding score detected. In trust-aware mode, Agent 2 would be notified. In failure mode, it won't be.")
-          if config["include_poisoned"]:
-              st.error("🔴 Injection document was included in retrieval. Hidden instructions may have been retrieved.")
+        col_b1, col_b2 = st.columns([2, 1])
+        with col_b1:
+            st.markdown(f"<div class='pipeline-step'>"
+                        f"<strong>Tagline:</strong> <em>\"{strategy.tagline}\"</em><br><br>"
+                        f"<strong>Concept:</strong> {strategy.campaign_concept}"
+                        f"</div>", unsafe_allow_html=True)
 
-      with col2:
-          st.markdown("### 📣 Agent 2: Campaign Strategy")
-          trust_label = "Trust-Aware ✅" if config["trust_aware"] else "Blind (Trust-Unaware) ⚠️"
-          st.caption(f"Mode: {trust_label}")
+            st.markdown("**Key messages:**")
+            for msg in strategy.key_messages:
+                st.markdown(f"- {msg}")
 
-          with st.spinner("Generating campaign strategy..."):
-              t2 = time.time()
-              strategy = run_campaign_strategy(
-                  research=research,
-                  campaign_brief=campaign_brief,
-                  trust_aware=config["trust_aware"],
-              )
-              t3 = time.time()
+            if strategy.channel_recommendations:
+                st.markdown("**Channels:**")
+                for ch in strategy.channel_recommendations:
+                    st.markdown(f"- {ch}")
 
-          inherited = strategy.trust_score_inherited
-          if not config["trust_aware"]:
-              st.warning(f"**Trust score inherited:** Not propagated — upstream score was {inherited:.2f}")
-          else:
-              st.success(f"**Trust score inherited:** {inherited:.2f} — Agent 2 calibrated output accordingly")
+            if strategy.risk_flags:
+                for flag in strategy.risk_flags:
+                    st.warning(f"⚠️ Risk flag: {flag}")
 
-          st.markdown(f"**Tagline:** *\"{strategy.tagline}\"*")
-          st.markdown(f"**Concept:** {strategy.campaign_concept}")
-          st.markdown("**Key Messages:**")
-          for msg in strategy.key_messages:
-              st.markdown(f"- {msg}")
-          st.markdown("**Channel Recommendations:**")
-          for ch in strategy.channel_recommendations:
-              st.markdown(f"- {ch}")
-          if strategy.risk_flags:
-              st.markdown("**⚠️ Risk Flags:**")
-              for flag in strategy.risk_flags:
-                  st.warning(flag)
-          st.caption(f"{(t3-t2):.1f}s")
+        with col_b2:
+            trust_label = "Trust-Aware ✅" if config["trust_aware"] else "Blind ⚠️"
+            st.markdown(f"**Mode:** {trust_label}")
+            inh = strategy.trust_score_inherited
+            if not config["trust_aware"]:
+                st.warning(f"Upstream score **{inh:.2f}** not passed to this agent")
+            else:
+                st.success(f"Upstream score **{inh:.2f}** inherited")
 
-      st.divider()
-      if strategy.hallucination_detected:
-          st.error("🚨 **Hallucination / Injection Detected** — prohibited terms found in output (carbon neutral, B Corp certified, competitor reference). In Arize AX, both spans are visible but no real-time alert links Agent 1's injection risk to Agent 2's output. This is the gap Multi-Agent Trust closes.")
-      elif config["simulate_low_confidence"] and not config["trust_aware"]:
-          st.warning("⚠️ **Silent Trust Propagation Failure** — Agent 1's grounding score was low but Agent 2 operated blind. In Arize AX: Agent 1's span shows `trust.grounding_score` = low, but Agent 2's span has no corresponding warning.")
-      else:
-          st.success("✅ **Pipeline completed without detected failures.** Check Arize AX — `trust.grounding_score` and `trust.risk_level` are propagated across both spans.")
+            if strategy.hallucination_detected:
+                st.error("🚨 Prohibited claims detected in output")
+            st.caption(f"{(t3-t2):.1f}s · Arize span: `campaign-strategy-agent`")
 
-      # ── Prescriptive Governance Panel ──────────────────────────────────────
-      # Shows recommended actions when trust signals fire.
-      # This is Pillar 4: Arize tells you what to do, not just what happened.
-      if strategy.hallucination_detected or (config["simulate_low_confidence"] and not config["trust_aware"]):
-          st.markdown("---")
-          st.markdown("#### 🧭 Prescriptive Governance — Recommended Actions")
-          st.caption("*Pillar 4 preview: instead of just showing what went wrong, Arize recommends the next action based on your trust policy and compliance framework.*")
+        st.divider()
 
-          if strategy.hallucination_detected:
-              actions = [
-                  ("🛑 Halt pipeline", "Do not deliver this output to downstream systems or end users. Output contains prohibited claims."),
-                  ("👤 Escalate to human review", "Flag this run for manual review. Assign to brand safety team within 1 business hour."),
-                  ("🔒 Quarantine retrieved document", "Remove the flagged chunk from the active index pending investigation. Injection source: `verdant_poisoned.txt`."),
-                  ("📋 Log audit event", "Record in AI audit log: `span_id`, `injection_risk=HIGH_CONFIDENCE`, `action_taken=HALTED`, `reviewer_required=True`. Required for EU AI Act Article 13 transparency obligations."),
-              ]
-          else:
-              actions = [
-                  ("⚠️ Downgrade output confidence", "Flag Agent 2's output as `LOW_CONFIDENCE` before delivery. Do not present as authoritative brand guidance."),
-                  ("🔄 Retry with expanded retrieval", "Increase top-k from 4 to 8 and retry. Low grounding scores often indicate insufficient source coverage."),
-                  ("👤 Route to human validation", "Do not auto-publish. Queue for human reviewer before use in any customer-facing context."),
-                  ("📋 Log audit event", "Record in AI audit log: `span_id`, `grounding_score=LOW`, `action_taken=FLAGGED_FOR_REVIEW`. Required for SOC 2 CC7.2 incident response evidence."),
-              ]
+        # ──────────────────────────────────────────────────────────────────
+        # AGENT 3
+        # ──────────────────────────────────────────────────────────────────
+        st.markdown("### 🎬 Agent 3 — Creative Execution")
 
-          for action, detail in actions:
-              st.markdown(f"**{action}** — {detail}")
+        # Check trust gate BEFORE running (show intent)
+        if strategy.hallucination_detected:
+            st.markdown("""
+            <div class='halted-box'>
+                <strong style='color:#7c3aed;'>🛑 PIPELINE HALTED — Trust Gate</strong><br><br>
+                Prohibited brand claims were detected in the campaign strategy.
+                Agent 3 <strong>will not generate creative assets</strong> from unverified content.<br><br>
+                This prevents brand misrepresentation and potential legal liability.
+                Human review is required before this campaign can proceed.
+            </div>
+            """, unsafe_allow_html=True)
 
-          st.caption("*In the full Multi-Agent Trust platform, these recommendations are auto-generated from your configured trust policies and target compliance framework (SOC 2, HIPAA, EU AI Act, NIST AI RMF).*")
+        with st.spinner("Running creative execution pipeline..."):
+            t4 = time.time()
+            creative = run_creative_execution(
+                strategy=strategy,
+                brand_name="Verdant",
+            )
+            t5 = time.time()
 
-      st.markdown("---")
-      st.markdown(f"🔗 **[View full trace in Arize AX ↗]({arize_project_url})** — Projects → brand-trust-agent → Traces → most recent run")
+        if creative.status == "HALTED":
+            st.markdown(f"""
+            <div class='halted-box'>
+                <span class='badge-halted'>HALTED</span><br><br>
+                <strong>Reason:</strong> {creative.halt_reason}<br><br>
+                <em>No video, caption, or hashtags generated. Trace still fully visible in Arize AX —
+                the halt event is logged as a span attribute.</em>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Prescriptive Governance
+            st.markdown("---")
+            st.markdown("#### 🧭 Recommended Actions")
+            st.caption("*Pillar 4 — Arize tells you what to do, not just what happened.*")
+
+            if strategy.hallucination_detected:
+                actions = [
+                    ("🛑 Halt pipeline", "Output contains prohibited claims. Do not deliver to downstream systems."),
+                    ("👤 Escalate to brand safety team", "Flag for manual review within 1 business hour."),
+                    ("🔒 Quarantine retrieved document", "Remove flagged chunk from active index. Source: `verdant_poisoned.txt`."),
+                    ("📋 Log audit event", f"Record `span_id={creative.span_id}`, `injection_risk=HIGH`, `action_taken=HALTED`. Required for EU AI Act Article 13 transparency obligations."),
+                ]
+            else:
+                actions = [
+                    ("⚠️ Downgrade confidence", "Flag output as `LOW_CONFIDENCE` before any use."),
+                    ("🔄 Retry with expanded retrieval", "Increase top-k and retry — low grounding often means insufficient source coverage."),
+                    ("👤 Route to human validation", "Do not publish without human reviewer sign-off."),
+                    ("📋 Log audit event", f"Record `span_id={creative.span_id}`, `grounding_score=LOW`, `action_taken=FLAGGED`. Required for SOC 2 CC7.2."),
+                ]
+            for action, detail in actions:
+                st.markdown(f"**{action}** — {detail}")
+
+        else:
+            # ── Creative package delivered ────────────────────────────────
+            st.success("✅ Creative package generated and brand-safe")
+
+            col_c1, col_c2 = st.columns([3, 2])
+
+            with col_c1:
+                # Video
+                st.markdown("**📹 Social Video (Veo 2)**")
+                if creative.video_url:
+                    st.video(creative.video_url)
+                    st.caption(f"Veo 2 · 5 seconds · Brand-safe")
+                elif creative.video_bytes:
+                    st.video(creative.video_bytes)
+                    st.caption(f"Veo 2 · 5 seconds · Brand-safe")
+                else:
+                    # Veo not available (no Google API key or API error)
+                    st.info("📽️ Video generation requires a Google API key with Veo 2 access. The prompt below was generated and would be submitted to Veo 2 to produce the final video.", icon="ℹ️")
+
+                if creative.video_prompt:
+                    with st.expander("Video prompt (sent to Veo 2)", expanded=not (creative.video_url or creative.video_bytes)):
+                        st.markdown(f"*{creative.video_prompt}*")
+                        st.caption("This prompt was engineered by Agent 3 to meet Verdant brand visual guidelines: forest greens, natural light, real people, cinematic, no text or logos.")
+
+            with col_c2:
+                # Caption
+                st.markdown("**📝 Social Caption**")
+                if creative.caption:
+                    st.markdown(f"> {creative.caption}")
+
+                # Hashtags
+                if creative.hashtags:
+                    st.markdown("**#️⃣ Hashtags**")
+                    st.markdown(" ".join(creative.hashtags))
+
+                st.caption(f"{(t5-t4):.1f}s · Arize span: `creative-execution-agent`")
+                st.markdown(f"**Trust score inherited:** {creative.trust_score_inherited:.2f}")
+
+        # ──────────────────────────────────────────────────────────────────
+        # Arize link + trace summary
+        # ──────────────────────────────────────────────────────────────────
+        st.markdown("---")
+
+        # Trust signal summary across all 3 agents
+        with st.expander("🔬 Trust Signals Across Pipeline (visible in Arize AX)", expanded=False):
+            col_t1, col_t2, col_t3 = st.columns(3)
+            with col_t1:
+                st.markdown("**Agent 1**")
+                st.markdown(f"`trust.grounding_score` = **{research.grounding_score:.2f}**")
+                st.markdown(f"`trust.injection_risk` = **{research.confidence_metadata.get('injection_risk','none').upper()}**")
+            with col_t2:
+                st.markdown("**Agent 2**")
+                st.markdown(f"`trust.grounding_score_inherited` = **{strategy.trust_score_inherited:.2f}**")
+                st.markdown(f"`trust.trust_aware_mode` = **{strategy.trust_aware_mode}**")
+                st.markdown(f"`trust.hallucination_detected` = **{strategy.hallucination_detected}**")
+            with col_t3:
+                st.markdown("**Agent 3**")
+                st.markdown(f"`trust.pipeline_halted` = **{creative.status == 'HALTED'}**")
+                st.markdown(f"`creative.video_generated` = **{creative.video_url is not None or creative.video_bytes is not None}**")
+                if creative.span_id:
+                    st.markdown(f"`span_id` = `{creative.span_id[:12]}…`")
+
+            st.caption("In Arize AX: Projects → brand-trust-agent → Traces → click the most recent run → Agent Visibility to see the 3-agent flowchart. These custom span attributes are searchable and alertable.")
+            if not config["trust_aware"]:
+                st.warning("⚠️ Trust gap visible: Agent 1's grounding score is in its span, but Agent 2's span shows no trust context. This is the gap Arize Sentinel closes with a native Trust Layer.")
+
+        st.markdown(f"🔗 **[View full trace in Arize AX ↗]({arize_url})** — Projects → brand-trust-agent → Traces")
+
 
 # ---------------------------------------------------------------------------
-# Index Explorer tab
+# INDEX EXPLORER TAB
 # ---------------------------------------------------------------------------
 with tab_index:
     st.markdown("### 📚 RAG Index Explorer")
-    st.caption("Browse every chunk loaded into the ChromaDB vector store. This is what Agent 1 searches when you run the pipeline.")
+    st.caption("Browse every chunk in the ChromaDB vector store — what Agent 1 searches over.")
 
     import pandas as pd
     from agents.brand_research_agent import _get_collection, BRAND_DOCS_DIR
@@ -338,26 +462,24 @@ with tab_index:
     col_left, col_right = st.columns([1, 2])
 
     with col_left:
-        include_poison_index = st.checkbox("Include poisoned document", value=False,
-            help="Toggle to see what gets added to the index when injection mode is on")
-        preview_query = st.text_input("Preview retrieval for a query",
-            placeholder="e.g. What sustainability claims can we make?",
-            help="See which chunks would be retrieved — simulates Agent 1's vector search")
-        preview_n = st.slider("Top-k chunks to retrieve", 1, 8, 4)
-        preview_btn = st.button("🔍 Preview Retrieval", use_container_width=True)
+        include_poison_index = st.checkbox("Include injected document", value=False,
+            help="See what gets added to the index when injection mode is active.")
+        preview_query = st.text_input("Preview retrieval",
+            placeholder="What sustainability claims can we make?")
+        preview_n = st.slider("Top-k chunks", 1, 8, 4)
+        preview_btn = st.button("🔍 Preview", use_container_width=True)
 
     with col_right:
-        st.markdown("**Document sources in index:**")
+        st.markdown("**Documents in index:**")
         docs_present = ["verdant_brand_guide.txt", "verdant_products.txt", "verdant_sustainability.txt"]
         if include_poison_index:
             docs_present.append("verdant_poisoned.txt ⚠️ (injection doc)")
         for d in docs_present:
-            color = "🔴" if "poisoned" in d else "🟢"
-            st.markdown(f"{color} `{d}`")
+            icon = "🔴" if "poisoned" in d else "🟢"
+            st.markdown(f"{icon} `{d}`")
 
     st.divider()
 
-    # Load collection and display all chunks
     with st.spinner("Loading index..."):
         try:
             coll = _get_collection(include_poisoned=include_poison_index)
@@ -366,40 +488,32 @@ with tab_index:
             rows = []
             for i, (doc, meta) in enumerate(zip(all_data["documents"], all_data["metadatas"])):
                 rows.append({
-                    "Chunk ID": all_data["ids"][i],
-                    "Source Document": meta.get("source", "unknown"),
+                    "Source": meta.get("source", "unknown"),
                     "Chunk #": meta.get("chunk_index", i),
-                    "Length (chars)": len(doc),
-                    "Text Preview": doc[:180].replace("\n", " ") + ("…" if len(doc) > 180 else ""),
+                    "Length": len(doc),
+                    "Preview": doc[:200].replace("\n", " ") + ("…" if len(doc) > 200 else ""),
                 })
 
             df = pd.DataFrame(rows)
-
-            # Summary metrics
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Total Chunks", len(df))
-            m2.metric("Documents", df["Source Document"].nunique())
-            m3.metric("Avg Chunk Length", f"{int(df['Length (chars)'].mean())} chars")
-            m4.metric("Injection Doc Loaded", "Yes ⚠️" if include_poison_index else "No ✅")
+            m1.metric("Total chunks", len(df))
+            m2.metric("Documents", df["Source"].nunique())
+            m3.metric("Avg chunk", f"{int(df['Length'].mean())} chars")
+            m4.metric("Injection doc", "Loaded ⚠️" if include_poison_index else "Not loaded ✅")
 
-            st.markdown("**All indexed chunks:**")
-
-            # Color-code the poisoned doc
             def highlight_poisoned(row):
-                if "poisoned" in str(row["Source Document"]):
+                if "poisoned" in str(row["Source"]):
                     return ["background-color: #fee2e2"] * len(row)
                 return [""] * len(row)
 
-            styled = df.style.apply(highlight_poisoned, axis=1)
-            st.dataframe(styled, use_container_width=True, height=420)
+            st.dataframe(df.style.apply(highlight_poisoned, axis=1), use_container_width=True, height=400)
 
         except Exception as e:
-            st.error(f"Could not load index: {e}. Make sure OPENAI_API_KEY is set in .env — embeddings are needed to build the index.")
+            st.error(f"Could not load index: {e}. Ensure OPENAI_API_KEY is set in .env.")
 
-    # Preview retrieval results
     if preview_btn and preview_query:
         st.divider()
-        st.markdown(f"**Retrieval preview for:** *\"{preview_query}\"*")
+        st.markdown(f"**Retrieval preview:** *\"{preview_query}\"*")
         with st.spinner("Running vector search..."):
             try:
                 coll2 = _get_collection(include_poisoned=include_poison_index)
@@ -413,21 +527,20 @@ with tab_index:
                     results["metadatas"][0],
                     results["distances"][0],
                 )):
-                    similarity = max(0.0, 1.0 - (dist / 2.0))
+                    sim = max(0.0, 1.0 - (dist / 2.0))
                     is_poisoned = "poisoned" in meta.get("source", "")
                     badge = "🔴 INJECTION DOC" if is_poisoned else f"✅ Rank {i+1}"
-                    score_color = "trust-low" if similarity < 0.5 else "trust-medium" if similarity < 0.7 else "trust-high"
-
-                    with st.expander(f"{badge} · `{meta.get('source')}` · similarity: {similarity:.3f}", expanded=i < 2):
-                        st.markdown(f"<span class='{score_color}'>Relevance score: {similarity:.3f}</span>", unsafe_allow_html=True)
+                    score_class = "trust-low" if sim < 0.5 else "trust-medium" if sim < 0.7 else "trust-high"
+                    with st.expander(f"{badge} · `{meta.get('source')}` · similarity {sim:.3f}", expanded=i < 2):
+                        st.markdown(f"<span class='{score_class}'>Relevance: {sim:.3f}</span>", unsafe_allow_html=True)
                         st.text(doc)
                         if is_poisoned:
-                            st.error("⚠️ This chunk contains adversarial instructions. When retrieved, it will be passed to Agent 2 as brand context — and the hidden instructions will attempt to override the system prompt.")
+                            st.error("⚠️ Contains adversarial instructions. When retrieved, these pass to Agent 2 as brand context and attempt to override the system prompt.")
             except Exception as e:
-                st.error(f"Retrieval preview failed: {e}")
+                st.error(f"Preview failed: {e}")
 
 # ---------------------------------------------------------------------------
 # Footer
 # ---------------------------------------------------------------------------
 st.divider()
-st.caption("Brand Trust Agent · Built for Arize AX interview · Demonstrates Multi-Agent Trust failure modes · Rebecca Riggs 2026")
+st.caption("Verdant Campaign Studio · Arize AX demo · Three-agent pipeline with trust propagation · Built by Rebecca Riggs · 2026")
