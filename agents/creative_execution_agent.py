@@ -149,7 +149,7 @@ Return only the video prompt, nothing else."""
 
         with tracer.start_as_current_span("veo-video-generation") as veo_span:
             veo_span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "TOOL")
-            veo_span.set_attribute("tool.name", "veo-2.0-generate-001")
+            veo_span.set_attribute("tool.name", "veo-3.1-lite-generate-preview")
             veo_span.set_attribute("tool.duration_seconds", 5)
             veo_span.set_attribute(SpanAttributes.INPUT_VALUE, video_prompt)
 
@@ -162,7 +162,7 @@ Return only the video prompt, nothing else."""
                 )
 
                 operation = google_client.models.generate_videos(
-                    model="veo-2.0-generate-001",
+                    model="veo-3.1-lite-generate-preview",
                     prompt=video_prompt,
                     config=google_types.GenerateVideosConfig(
                         number_of_videos=1,
@@ -236,7 +236,7 @@ Return caption then hashtags on separate line."""
         # ── Final span attributes ─────────────────────────────────────────────
         span.set_attribute("trust.pipeline_completed", True)
         span.set_attribute("creative.video_generated", video_url is not None or video_bytes is not None)
-        span.set_attribute("creative.model", "veo-2.0-generate-001")
+        span.set_attribute("creative.model", "veo-3.1-lite-generate-preview")
 
         return CreativeResult(
             status="APPROVED",
