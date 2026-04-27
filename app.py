@@ -406,13 +406,16 @@ if run_btn and user_prompt.strip():
             elif creative.video_bytes:
                 st.video(creative.video_bytes)
             else:
-                st.markdown("""
+                if creative.video_error:
+                    st.warning(f"⚠️ Video generation failed: `{creative.video_error}`")
+                else:
+                    st.markdown("""
                 <div style='background:#f1f5f9; border-radius:10px; padding:40px; text-align:center; color:#64748b;'>
                     <div style='font-size:2rem;'>📽️</div>
-                    <div style='font-weight:600; margin-top:8px;'>Veo 2 video ready to generate</div>
+                    <div style='font-weight:600; margin-top:8px;'>Veo 3.1 Lite ready to generate</div>
                     <div style='font-size:0.85rem; margin-top:4px;'>Add a Google API key to generate the video</div>
                 </div>
-                """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
 
             if creative.video_prompt:
                 with st.expander("Video prompt", expanded=False):

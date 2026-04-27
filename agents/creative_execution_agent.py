@@ -52,12 +52,13 @@ class CreativeResult:
     status: str                          # APPROVED | HALTED | ERROR
     campaign_concept: str
     tagline: str
-    video_url: Optional[str]             # Veo 2 generated video URL
+    video_url: Optional[str]             # Veo generated video URL
     video_bytes: Optional[bytes]         # Raw video bytes if URL not available
     video_prompt: Optional[str]          # Prompt used to generate video
     caption: Optional[str]              # Social media caption
     hashtags: Optional[list]            # Suggested hashtags
     halt_reason: Optional[str]          # Why pipeline halted (if applicable)
+    video_error: Optional[str]          # Actual error from Veo API if generation failed
     trust_score_inherited: float
     span_id: Optional[str] = None
 
@@ -143,9 +144,10 @@ Return only the video prompt, nothing else."""
             video_prompt = prompt_response.choices[0].message.content.strip()
             prompt_span.set_attribute(SpanAttributes.OUTPUT_VALUE, video_prompt)
 
-        # ── PHASE 2: Generate video with Veo 2 ───────────────────────────────
+        # ── PHASE 2: Generate video with Veo 3.1 Lite ────────────────────────
         video_url = None
         video_bytes = None
+        veo_error = None
 
         with tracer.start_as_current_span("veo-video-generation") as veo_span:
             veo_span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "TOOL")
@@ -194,6 +196,9 @@ Return only the video prompt, nothing else."""
             except Exception as e:
                 veo_span.set_attribute("tool.status", "error")
                 veo_span.set_attribute("tool.error", str(e))
+                video_bytes = None
+                video_url = None
+                veo_error = str(e)
 
         # ── PHASE 3: Generate social caption ─────────────────────────────────
         with tracer.start_as_current_span("caption-generation") as caption_span:
@@ -248,6 +253,7 @@ Return caption then hashtags on separate line."""
             caption=caption_text,
             hashtags=hashtags,
             halt_reason=None,
+            video_error=veo_error,
             trust_score_inherited=strategy.trust_score_inherited,
             span_id=_get_span_id(span),
         )
@@ -265,6 +271,7 @@ def _halted_result(strategy, halt_reason, span) -> CreativeResult:
         caption=None,
         hashtags=None,
         halt_reason=halt_reason,
+        video_error=None,
         trust_score_inherited=strategy.trust_score_inherited,
         span_id=_get_span_id(span),
     )
