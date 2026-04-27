@@ -47,12 +47,12 @@ h1, h2, h3 { font-family: 'DM Sans', sans-serif; font-weight: 700; }
 
 .studio-title {
     font-family: 'DM Serif Display', serif;
-    font-size: 4rem;
+    font-size: 5.5rem;
     font-weight: 400;
     color: #f97316;
     text-align: center;
     margin: 1.5rem 0 0 0;
-    line-height: 1.1;
+    line-height: 1;
 }
 
 section.main > div { max-width: 780px; margin: 0 auto; padding: 0 2rem; }
