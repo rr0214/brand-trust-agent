@@ -210,7 +210,7 @@ All steps are traced in **Arize AX** with full span visibility.
 # ---------------------------------------------------------------------------
 # Main area
 # ---------------------------------------------------------------------------
-st.markdown("<p class='studio-title'>Campaign Studio</p>", unsafe_allow_html=True)
+st.markdown("<p style='font-family:DM Serif Display, serif; font-size:1.8rem; font-weight:400; color:#ff4b4b; text-align:center; margin:1.5rem 0 0 0;'>Campaign Studio</p>", unsafe_allow_html=True)
 st.markdown("<p style='font-size:1.15rem; color:#64748b; text-align:center; margin-top:8px; margin-bottom:2rem;'>Brand-safe social media campaign generation</p>", unsafe_allow_html=True)
 
 st.divider()
