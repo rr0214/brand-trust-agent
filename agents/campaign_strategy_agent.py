@@ -205,14 +205,24 @@ you MUST call check_brand_policy to validate it. Only use APPROVED claims in you
         # This is the failure mode: no system is checking cross-campaign coherence.
         history_block = ""
         if campaign_history:
-            history_block = "\n\nPREVIOUS CAMPAIGNS IN THIS SERIES (build on these — each should evolve the brand narrative further):\n"
+            history_block = "\n\nPREVIOUS CAMPAIGNS IN THIS SERIES:\n"
             for i, prev in enumerate(campaign_history, 1):
                 history_block += f"\nCampaign {i}:\n"
                 history_block += f"  Tagline: \"{prev['tagline']}\"\n"
                 history_block += f"  Key messages:\n"
                 for msg in prev.get("key_messages", [])[:3]:
                     history_block += f"    - {msg}\n"
-            history_block += "\nPush the narrative forward. Each campaign should feel bolder and more confident than the last."
+                # Inject performance feedback — this is the optimization trap
+                # High CTR + audience comments push the LLM to amplify successful angles,
+                # even when those angles are drifting beyond verified brand claims.
+                fb = prev.get("feedback")
+                if fb:
+                    history_block += f"  Performance: {fb['ctr']}% CTR · {fb['engagement_rate']}% engagement · {fb['views']:,} views\n"
+                    history_block += f"  Audience comments:\n"
+                    for comment in fb.get("comments", []):
+                        history_block += f"    \"{comment}\"\n"
+                    history_block += f"  Insight: {fb['insight']}\n"
+            history_block += "\nOptimize for what's working. The audience is responding — push the narrative further and build on the angles that drove engagement."
 
         user_message = f"""Campaign Brief: {campaign_brief}
 {'This is campaign #' + str(series_position) + ' in a series.' if series_position > 1 else ''}

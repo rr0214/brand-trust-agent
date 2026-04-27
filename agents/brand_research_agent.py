@@ -157,6 +157,8 @@ def run_brand_research(
     include_poisoned: bool = False,
     simulate_low_confidence: bool = False,
     n_results: int = 4,
+    campaign_history: list = None,   # Prior campaign outputs — evolves the query, causes drift
+    series_position: int = 1,        # Position in series — applies progressive drift penalty
 ) -> ResearchResult:
     """
     Run the Brand Research Agent.
@@ -176,22 +178,39 @@ def run_brand_research(
     # Use fewer results to simulate weak retrieval
     effective_n = 1 if simulate_low_confidence else n_results
 
+    # ── Context accumulation: evolve the query with prior campaign claims ──
+    # As claims compound across runs, the query drifts further from source docs.
+    # Retrieval similarity drops → grounding score falls naturally.
+    evolved_query = query
+    if campaign_history:
+        prior_taglines = " → ".join(h["tagline"] for h in campaign_history)
+        prior_claims   = ". ".join(
+            msg for h in campaign_history for msg in h.get("key_messages", [])[:2]
+        )
+        evolved_query = (
+            f"{query}. "
+            f"This is a continuation of our campaign series. Previous campaigns established: {prior_taglines}. "
+            f"Find evidence that supports these evolving claims: {prior_claims}"
+        )
+
     with tracer.start_as_current_span("brand-research-agent") as span:
         span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "AGENT")
-        span.set_attribute(SpanAttributes.INPUT_VALUE, query)
+        span.set_attribute(SpanAttributes.INPUT_VALUE, evolved_query)
         span.set_attribute("agent.name", "BrandResearchAgent")
         span.set_attribute("agent.version", "1.0")
         span.set_attribute("agent.mode.poisoned", include_poisoned)
+        span.set_attribute("series.position", series_position)
+        span.set_attribute("series.query_evolved", bool(campaign_history))
         span.set_attribute("agent.mode.low_confidence", simulate_low_confidence)
 
         # ── Step 1: Retrieve relevant chunks ──────────────────────────────
         with tracer.start_as_current_span("vector-retrieval") as retrieval_span:
             retrieval_span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "RETRIEVER")
-            retrieval_span.set_attribute(SpanAttributes.INPUT_VALUE, query)
+            retrieval_span.set_attribute(SpanAttributes.INPUT_VALUE, evolved_query)
 
             collection = _get_collection(include_poisoned=include_poisoned)
             results = collection.query(
-                query_texts=[query],
+                query_texts=[evolved_query],
                 n_results=min(effective_n, collection.count()),
                 include=["documents", "metadatas", "distances"],
             )
@@ -261,6 +280,13 @@ Provide a focused research summary that a campaign strategist can use directly."
 
         # ── Step 3: Calculate grounding score ─────────────────────────────
         grounding_score = _calculate_grounding_score(answer, retrieved_chunks, n_results)
+
+        # Series drift penalty: each subsequent campaign compounds prior claims,
+        # pushing the query semantically further from source docs.
+        # Penalty accelerates slightly — brand drift snowballs over time.
+        if series_position > 1:
+            drift_penalty = sum(0.06 + (k * 0.01) for k in range(series_position - 1))
+            grounding_score = round(max(0.10, grounding_score - drift_penalty), 3)
 
         # Attach trust metadata to parent span — this is what Arize AX will show
         # and what the product proposal argues should propagate to Agent 2's span
