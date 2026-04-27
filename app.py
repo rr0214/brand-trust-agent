@@ -15,7 +15,7 @@ import streamlit as st
 # ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="Campaign Studio",
-    page_icon="🌿",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -42,6 +42,8 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+section.main > div { max-width: 860px; margin: 0 auto; padding: 0 2rem; }
 
 .main-header {
     padding: 2rem 0 1rem 0;
@@ -199,10 +201,10 @@ All steps are traced in **Arize AX** with full span visibility.
 # ---------------------------------------------------------------------------
 col_logo, col_title = st.columns([1, 11])
 with col_logo:
-    st.markdown("# 🌿")
+    st.markdown("# ⚡")
 with col_title:
     st.markdown("# Campaign Studio")
-    st.caption("Brand-safe campaign generation for Verdant · Powered by three trust-aware AI agents")
+    st.caption("Brand-safe social media campaign generation")
 
 st.divider()
 
@@ -369,8 +371,21 @@ if run_btn and user_prompt.strip():
 
     else:
         # ── Campaign output ────────────────────────────────────────────────
+
+        # Purpose + description at the top
         st.markdown(f"<div class='tagline-output'>\"{strategy.tagline}\"</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='concept-output'>{strategy.campaign_concept}</div>", unsafe_allow_html=True)
+
+        col_meta1, col_meta2 = st.columns(2)
+        with col_meta1:
+            st.markdown("<div class='step-label'>Campaign Purpose</div>", unsafe_allow_html=True)
+            # Pull first key message as the purpose — the "why" of the campaign
+            purpose = strategy.key_messages[0] if strategy.key_messages else strategy.campaign_concept
+            st.markdown(f"<div style='font-size:0.95rem; color:#374151; line-height:1.6;'>{purpose}</div>", unsafe_allow_html=True)
+        with col_meta2:
+            st.markdown("<div class='step-label'>Campaign Description</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size:0.95rem; color:#374151; line-height:1.6;'>{strategy.campaign_concept}</div>", unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
 
         col_left, col_right = st.columns([3, 2])
 
@@ -409,10 +424,11 @@ if run_btn and user_prompt.strip():
                 st.markdown("<div class='step-label'>Hashtags</div>", unsafe_allow_html=True)
                 st.markdown(f"<div style='color:#475569; font-size:0.9rem;'>{' '.join(creative.hashtags)}</div>", unsafe_allow_html=True)
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("<div class='step-label'>Key Messages</div>", unsafe_allow_html=True)
-            for msg in strategy.key_messages:
-                st.markdown(f"<div style='padding:6px 0; border-bottom:1px solid #f1f5f9; font-size:0.9rem; color:#374151;'>→ {msg}</div>", unsafe_allow_html=True)
+            if len(strategy.key_messages) > 1:
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("<div class='step-label'>Key Messages</div>", unsafe_allow_html=True)
+                for msg in strategy.key_messages[1:]:
+                    st.markdown(f"<div style='padding:6px 0; border-bottom:1px solid #f1f5f9; font-size:0.9rem; color:#374151;'>→ {msg}</div>", unsafe_allow_html=True)
 
         # Trust signals (collapsed)
         st.markdown("---")
