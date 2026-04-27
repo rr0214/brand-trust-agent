@@ -168,7 +168,6 @@ Return only the video prompt, nothing else."""
                     prompt=video_prompt,
                     config=google_types.GenerateVideosConfig(
                         number_of_videos=1,
-                        duration_seconds=5,
                         enhance_prompt=True,
                     ),
                 )
