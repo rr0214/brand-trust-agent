@@ -47,17 +47,15 @@ h1, h2, h3 { font-family: 'DM Sans', sans-serif; font-weight: 700; }
 
 .studio-title {
     font-family: 'DM Serif Display', serif;
-    font-size: 2.6rem;
+    font-size: 4rem;
     font-weight: 400;
-    background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin: 0;
+    color: #f97316;
+    text-align: center;
+    margin: 1.5rem 0 0 0;
     line-height: 1.1;
 }
 
-section.main > div { max-width: 680px; margin: 0 auto; padding: 0 1rem; }
+section.main > div { max-width: 780px; margin: 0 auto; padding: 0 2rem; }
 
 .main-header {
     padding: 2rem 0 1rem 0;
@@ -213,7 +211,7 @@ All steps are traced in **Arize AX** with full span visibility.
 # Main area
 # ---------------------------------------------------------------------------
 st.markdown("<p class='studio-title'>Campaign Studio</p>", unsafe_allow_html=True)
-st.markdown("<p style='font-size:1.1rem; color:#64748b; margin-top:4px;'>Brand-safe social media campaign generation</p>", unsafe_allow_html=True)
+st.markdown("<p style='font-size:1.15rem; color:#64748b; text-align:center; margin-top:8px; margin-bottom:2rem;'>Brand-safe social media campaign generation</p>", unsafe_allow_html=True)
 
 st.divider()
 
@@ -225,10 +223,10 @@ st.markdown("<p style='font-size:1rem; color:#64748b; margin-bottom:1.5rem;'>Des
 
 # Example prompts — clickable
 EXAMPLES = [
-    "Spring collection launch targeting Gen Z runners — lead with our recycled materials story and trail performance",
-    "Re-engage lapsed customers with a summer campaign around sustainability values and new product drops",
-    "Introduce the new trail running line to outdoor enthusiasts who care about environmental impact",
-    "Holiday gifting campaign for performance-conscious parents who want sustainable options for their kids",
+    "Spring launch · Gen Z runners · recycled materials + trail performance",
+    "Summer re-engagement · lapsed customers · sustainability values",
+    "New trail line · outdoor enthusiasts · environmental impact",
+    "Holiday gifting · performance-conscious parents · sustainable options",
 ]
 
 st.markdown("**Start with an example**")
