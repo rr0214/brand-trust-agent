@@ -218,8 +218,8 @@ st.divider()
 # ---------------------------------------------------------------------------
 # Campaign input — center stage
 # ---------------------------------------------------------------------------
-st.markdown("<h2 style='font-size:1.8rem; font-weight:700; margin-bottom:4px;'>What would you like to campaign about?</h2>", unsafe_allow_html=True)
-st.markdown("<p style='font-size:1rem; color:#64748b; margin-bottom:1.5rem;'>Describe the goal, audience, and angle. The agents will research brand facts, build the strategy, validate every claim, and generate a social video.</p>", unsafe_allow_html=True)
+st.markdown("<h2 style='font-size:1.3rem; font-weight:700; margin-bottom:4px; text-align:center;'>What would you like to campaign about?</h2>", unsafe_allow_html=True)
+st.markdown("<p style='font-size:0.95rem; color:#64748b; margin-bottom:1.5rem; text-align:center;'>Describe the goal, audience, and angle. The agents will research brand facts, build the strategy, validate every claim, and generate a social video.</p>", unsafe_allow_html=True)
 
 # Example prompts — clickable
 EXAMPLES = [
