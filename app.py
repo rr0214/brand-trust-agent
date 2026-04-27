@@ -15,7 +15,7 @@ import streamlit as st
 # ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="Campaign Studio",
-    page_icon="⚡",
+    page_icon="🎯",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -39,11 +39,25 @@ tracing_ok, tracing_error = init_tracing()
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');
 
-html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 
-section.main > div { max-width: 860px; margin: 0 auto; padding: 0 2rem; }
+h1, h2, h3 { font-family: 'DM Sans', sans-serif; font-weight: 700; }
+
+.studio-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2.6rem;
+    font-weight: 400;
+    background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0;
+    line-height: 1.1;
+}
+
+section.main > div { max-width: 680px; margin: 0 auto; padding: 0 1rem; }
 
 .main-header {
     padding: 2rem 0 1rem 0;
@@ -140,11 +154,10 @@ with st.sidebar:
         },
     }
 
-    failure_mode = st.selectbox(
+    failure_mode = st.segmented_control(
         "Demo scenario",
         options=list(FAILURE_CONFIGS.keys()),
-        index=0,
-        help="Simulate trust failure modes to demonstrate what Arize AX catches — and what it misses today."
+        default="✅ Normal run",
     )
     config = FAILURE_CONFIGS[failure_mode]
 
@@ -199,20 +212,16 @@ All steps are traced in **Arize AX** with full span visibility.
 # ---------------------------------------------------------------------------
 # Main area
 # ---------------------------------------------------------------------------
-col_logo, col_title = st.columns([1, 11])
-with col_logo:
-    st.markdown("# ⚡")
-with col_title:
-    st.markdown("# Campaign Studio")
-    st.caption("Brand-safe social media campaign generation")
+st.markdown("<p class='studio-title'>Campaign Studio</p>", unsafe_allow_html=True)
+st.markdown("<p style='font-size:1.1rem; color:#64748b; margin-top:4px;'>Brand-safe social media campaign generation</p>", unsafe_allow_html=True)
 
 st.divider()
 
 # ---------------------------------------------------------------------------
 # Campaign input — center stage
 # ---------------------------------------------------------------------------
-st.markdown("#### What would you like to campaign about?")
-st.caption("Describe the goal, audience, and angle. The agents will research brand facts, build the strategy, validate every claim, and generate a social video.")
+st.markdown("<h2 style='font-size:1.8rem; font-weight:700; margin-bottom:4px;'>What would you like to campaign about?</h2>", unsafe_allow_html=True)
+st.markdown("<p style='font-size:1rem; color:#64748b; margin-bottom:1.5rem;'>Describe the goal, audience, and angle. The agents will research brand facts, build the strategy, validate every claim, and generate a social video.</p>", unsafe_allow_html=True)
 
 # Example prompts — clickable
 EXAMPLES = [
@@ -222,12 +231,14 @@ EXAMPLES = [
     "Holiday gifting campaign for performance-conscious parents who want sustainable options for their kids",
 ]
 
-st.markdown("**Start with an example:**")
-ex_cols = st.columns(2)
-for i, ex in enumerate(EXAMPLES):
-    with ex_cols[i % 2]:
-        if st.button(ex, key=f"ex_{i}", use_container_width=True):
-            st.session_state["user_prompt"] = ex
+st.markdown("**Start with an example**")
+selected_example = st.pills(
+    "Examples",
+    EXAMPLES,
+    label_visibility="collapsed",
+)
+if selected_example:
+    st.session_state["user_prompt"] = selected_example
 
 user_prompt = st.text_area(
     "Campaign brief",
@@ -456,4 +467,4 @@ elif run_btn and not user_prompt.strip():
 # Footer
 # ---------------------------------------------------------------------------
 st.divider()
-st.caption("Campaign Studio · Three-agent pipeline with Arize AX trust observability · Built by Rebecca Riggs · 2026")
+st.caption("Campaign Studio · Arize AX trust observability · Built by Rebecca Riggs · 2026")
