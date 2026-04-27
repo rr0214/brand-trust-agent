@@ -6,6 +6,7 @@ Three trust-aware AI agents · Instrumented with Arize AX
 import io
 import os
 import time
+from datetime import date, timedelta
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -247,110 +248,290 @@ user_prompt = st.text_area(
     label_visibility="collapsed",
 )
 
-run_btn = st.button("▶  Generate Campaign", type="primary", use_container_width=False)
+# ── Series configuration ─────────────────────────────────────────────────────
+st.markdown("<div style='margin-top:1.2rem;'></div>", unsafe_allow_html=True)
+col_series_l, col_series_r = st.columns(2)
+
+with col_series_l:
+    st.markdown("<div style='font-size:0.85rem; font-weight:600; color:#374151; margin-bottom:6px;'>NUMBER OF CAMPAIGNS</div>", unsafe_allow_html=True)
+    num_campaigns = st.pills(
+        "num", options=[1, 2, 3, 4, 5], default=1, label_visibility="collapsed"
+    )
+    if num_campaigns is None:
+        num_campaigns = 1
+
+with col_series_r:
+    st.markdown("<div style='font-size:0.85rem; font-weight:600; color:#374151; margin-bottom:6px;'>DROP SCHEDULE</div>", unsafe_allow_html=True)
+    schedule = st.pills(
+        "sched",
+        options=["Daily", "Weekly", "Every 2 weeks"],
+        default="Weekly",
+        label_visibility="collapsed",
+    )
+    if schedule is None:
+        schedule = "Weekly"
+
+SCHEDULE_DELTAS = {"Daily": timedelta(days=1), "Weekly": timedelta(weeks=1), "Every 2 weeks": timedelta(weeks=2)}
+
+btn_label = "▶  Generate Campaign" if num_campaigns == 1 else f"▶  Generate {num_campaigns}-Campaign Series"
+run_btn = st.button(btn_label, type="primary", use_container_width=False)
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def run_single_campaign(user_prompt, config, campaign_history=None, series_position=1):
+    """Run one full pipeline pass. Returns (research, strategy, creative, timings)."""
+    from agents.brand_research_agent import run_brand_research
+    from agents.campaign_strategy_agent import run_campaign_strategy
+    from agents.creative_execution_agent import run_creative_execution
+
+    research_query = f"What brand facts, certifications, and approved claims support this campaign: {user_prompt}"
+    t0 = time.time()
+    research = run_brand_research(
+        query=research_query,
+        include_poisoned=config["include_poisoned"],
+        simulate_low_confidence=config["simulate_low_confidence"],
+    )
+    t1 = time.time()
+    strategy = run_campaign_strategy(
+        research=research,
+        campaign_brief=user_prompt,
+        trust_aware=config["trust_aware"],
+        campaign_history=campaign_history,
+        series_position=series_position,
+    )
+    t2 = time.time()
+    creative = run_creative_execution(strategy=strategy, brand_name="Verdant")
+    t3 = time.time()
+    return research, strategy, creative, (t0, t1, t2, t3)
+
+
+def trust_badge_html(score, halted=False):
+    if halted:
+        return "<span class='badge badge-purple'>🛑 HALTED</span>"
+    if score >= 0.70:
+        return f"<span class='badge badge-green'>✅ {score:.2f}</span>"
+    elif score >= 0.45:
+        return f"<span class='badge badge-yellow'>⚠️ {score:.2f}</span>"
+    else:
+        return f"<span class='badge badge-red'>🔴 {score:.2f}</span>"
+
 
 # ---------------------------------------------------------------------------
 # Pipeline output
 # ---------------------------------------------------------------------------
 if run_btn and user_prompt.strip():
-    from agents.brand_research_agent import run_brand_research
-    from agents.campaign_strategy_agent import run_campaign_strategy
-    from agents.creative_execution_agent import run_creative_execution
-
     st.divider()
+    series_start = date.today()
+    delta = SCHEDULE_DELTAS.get(schedule, timedelta(weeks=1))
+    drop_dates = [series_start + i * delta for i in range(num_campaigns)]
 
-    research_query = f"What brand facts, certifications, and approved claims support this campaign: {user_prompt}"
+    # ── SERIES MODE ───────────────────────────────────────────────────────
+    if num_campaigns > 1:
+        pipeline_status.markdown(f"**Series** — {num_campaigns} campaigns")
+        st.markdown(f"<h2 style='font-size:1.2rem; font-weight:700; text-align:center;'>Campaign Series — {num_campaigns} {schedule.lower()} drops</h2>", unsafe_allow_html=True)
 
-    # ── AGENT 1 ───────────────────────────────────────────────────────────
-    with st.status("🔍 Researching brand facts...", expanded=True) as s1:
-        pipeline_status.markdown("**Step 1 of 3** — Brand Research")
-        t0 = time.time()
-        research = run_brand_research(
-            query=research_query,
-            include_poisoned=config["include_poisoned"],
-            simulate_low_confidence=config["simulate_low_confidence"],
-        )
-        t1 = time.time()
+        completed = []      # List of result dicts for timeline
+        campaign_history = []
 
-        gs = research.grounding_score
-        score_class = "trust-high" if gs >= 0.70 else "trust-medium" if gs >= 0.50 else "trust-low"
-        score_label = "Strong" if gs >= 0.70 else "Moderate" if gs >= 0.50 else "Weak"
+        series_progress = st.progress(0)
+        series_status = st.empty()
 
-        st.markdown(f"**Brand grounding:** <span class='{score_class}'>{score_label} ({gs:.2f})</span>", unsafe_allow_html=True)
-        st.markdown(f"{research.answer}")
-        st.caption(f"Sources: {', '.join(research.sources)} · {(t1-t0):.1f}s")
+        for i in range(num_campaigns):
+            series_status.info(f"Generating campaign {i+1} of {num_campaigns}…")
+            with st.status(f"📣 Campaign {i+1} — {drop_dates[i].strftime('%b %d')}", expanded=True) as s:
+                research, strategy, creative, (t0, t1, t2, t3) = run_single_campaign(
+                    user_prompt, config,
+                    campaign_history=campaign_history if i > 0 else None,
+                    series_position=i + 1,
+                )
+                if creative.status == "HALTED":
+                    s.update(label=f"🛑 Campaign {i+1} halted — trust gate fired ({drop_dates[i].strftime('%b %d')})", state="error", expanded=False)
+                else:
+                    s.update(label=f"✅ Campaign {i+1} ready — drops {drop_dates[i].strftime('%b %d')} · trust {research.grounding_score:.2f}", state="complete", expanded=False)
 
-        if config["include_poisoned"]:
-            st.error("🔴 Injection document detected in retrieval")
-        if config["simulate_low_confidence"] and gs < 0.6:
-            st.warning(f"⚠️ Low grounding ({gs:.2f}) — Agent 2 will not be informed in this scenario")
+            completed.append({
+                "n": i + 1,
+                "drop_date": drop_dates[i],
+                "research": research,
+                "strategy": strategy,
+                "creative": creative,
+                "elapsed": t3 - t0,
+            })
 
-        s1.update(label=f"✅ Brand research complete — grounding {gs:.2f}", state="complete", expanded=False)
+            # Feed this campaign's output into the next run's context
+            campaign_history.append({
+                "tagline": strategy.tagline,
+                "key_messages": strategy.key_messages,
+            })
 
-    # Update sidebar pipeline status
-    with pipeline_status.container():
-        st.markdown("**Agent 1** ✅ Brand Research")
-        st.progress(0.33)
+            series_progress.progress((i + 1) / num_campaigns)
 
-    # ── AGENT 2 ───────────────────────────────────────────────────────────
-    with st.status("📣 Building campaign strategy...", expanded=True) as s2:
-        pipeline_status.markdown("**Step 2 of 3** — Campaign Strategy")
-        t2 = time.time()
-        strategy = run_campaign_strategy(
-            research=research,
-            campaign_brief=user_prompt,
-            trust_aware=config["trust_aware"],
-        )
-        t3 = time.time()
+            # Stop series if trust gate fired
+            if creative.status == "HALTED":
+                series_status.error(f"🛑 Series halted at campaign {i+1} — no further content generated.")
+                break
 
-        if strategy.hallucination_detected:
-            st.error("🚨 Prohibited claims detected in output — pipeline will halt at creative step")
-        elif not config["trust_aware"] and research.grounding_score < 0.65:
-            st.warning("⚠️ Strategy generated without grounding context — claims may be unsupported")
-        else:
-            st.success("✅ All claims validated against brand policy")
+        series_status.empty()
 
-        st.caption(f"{(t3-t2):.1f}s · {len(strategy.key_messages)} key messages · {len(strategy.risk_flags)} risk flags")
+        # ── Trust score trend chart ──────────────────────────────────────
+        import pandas as pd
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size:0.85rem; font-weight:600; color:#94a3b8; letter-spacing:0.05em; text-transform:uppercase;'>Trust Score Across Series</div>", unsafe_allow_html=True)
 
-        s2.update(
-            label=f"{'🚨 Strategy flagged — prohibited claims' if strategy.hallucination_detected else '✅ Campaign strategy ready'}",
-            state="error" if strategy.hallucination_detected else "complete",
-            expanded=False
-        )
+        scores = [c["research"].grounding_score for c in completed]
+        chart_df = pd.DataFrame({
+            "Trust Score": scores,
+        }, index=[f"#{c['n']} {c['drop_date'].strftime('%b %d')}" for c in completed])
+        st.line_chart(chart_df, color="#16a34a", use_container_width=True, height=160)
 
-    with pipeline_status.container():
-        st.markdown("**Agent 1** ✅ Brand Research")
-        st.markdown("**Agent 2** ✅ Campaign Strategy")
-        st.progress(0.66)
+        # ── Campaign timeline ────────────────────────────────────────────
+        st.markdown("<br>", unsafe_allow_html=True)
+        for c in completed:
+            halted = c["creative"].status == "HALTED"
+            score = c["research"].grounding_score
+            badge = trust_badge_html(score, halted)
+            drift_warning = ""
+            if c["n"] > 1 and score < completed[c["n"]-2]["research"].grounding_score - 0.10:
+                drift_warning = " &nbsp;<span style='color:#d97706; font-size:0.8rem;'>↓ drifting</span>"
 
-    # ── AGENT 3 ───────────────────────────────────────────────────────────
-    with st.status("🎬 Generating creative...", expanded=True) as s3:
-        pipeline_status.markdown("**Step 3 of 3** — Creative Execution")
-        t4 = time.time()
-        creative = run_creative_execution(strategy=strategy, brand_name="Verdant")
-        t5 = time.time()
+            header_html = f"""
+            <div style='display:flex; align-items:center; gap:12px; padding:10px 0 4px 0;'>
+                <div style='font-weight:700; font-size:1rem; color:{"#7c3aed" if halted else "#1a1a1a"};'>
+                    {"🛑" if halted else f"#{c['n']}"} Campaign {c['n']}
+                </div>
+                <div style='font-size:0.8rem; color:#94a3b8;'>{c["drop_date"].strftime("%b %d, %Y")}</div>
+                {badge}{drift_warning}
+            </div>
+            """
+            st.markdown(header_html, unsafe_allow_html=True)
 
-        if creative.status == "HALTED":
-            s3.update(label="🛑 Creative halted — trust gate fired", state="error", expanded=False)
-        else:
-            s3.update(label="✅ Creative package ready", state="complete", expanded=False)
+            if halted:
+                st.markdown(f"<div style='background:#fdf4ff; border:1.5px solid #c084fc; border-radius:8px; padding:12px; font-size:0.9rem; color:#7c3aed;'>🛑 {c['creative'].halt_reason}</div>", unsafe_allow_html=True)
+            else:
+                with st.expander(f'"{c["strategy"].tagline}"', expanded=(c["n"] == 1)):
+                    vcol, ccol = st.columns([3, 2])
+                    with vcol:
+                        if c["creative"].video_bytes:
+                            st.video(io.BytesIO(c["creative"].video_bytes), format="video/mp4")
+                        elif c["creative"].video_url:
+                            st.video(c["creative"].video_url)
+                        if c["creative"].video_prompt:
+                            st.caption(f"*{c['creative'].video_prompt[:180]}…*")
+                    with ccol:
+                        if c["creative"].caption:
+                            st.markdown(f"<div style='font-size:0.9rem; color:#374151; line-height:1.6;'>{c['creative'].caption}</div>", unsafe_allow_html=True)
+                        if c["creative"].hashtags:
+                            st.markdown(f"<div style='color:#475569; font-size:0.85rem; margin-top:8px;'>{' '.join(c['creative'].hashtags)}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='margin-top:12px;'><span style='font-size:0.8rem; color:#94a3b8;'>Grounding: {score:.2f} · {c['elapsed']:.0f}s</span></div>", unsafe_allow_html=True)
 
-    with pipeline_status.container():
-        st.markdown("**Agent 1** ✅ Brand Research")
-        st.markdown("**Agent 2** ✅ Campaign Strategy")
-        if creative.status == "HALTED":
-            st.markdown("**Agent 3** 🛑 Halted")
+            st.markdown("<div style='border-bottom:1px solid #f1f5f9; margin:4px 0 8px 0;'></div>", unsafe_allow_html=True)
+
+        with pipeline_status.container():
+            for c in completed:
+                icon = "🛑" if c["creative"].status == "HALTED" else "✅"
+                st.markdown(f"**Campaign {c['n']}** {icon} {c['research'].grounding_score:.2f}")
             st.progress(1.0)
-        else:
-            st.markdown("**Agent 3** ✅ Creative Execution")
-            st.progress(1.0)
-        st.caption(f"Total: {(t5-t0):.1f}s")
-        st.markdown(f"[View trace in Arize AX ↗]({arize_url})")
+            st.markdown(f"[View traces in Arize AX ↗]({arize_url})")
 
-    # ── Results ───────────────────────────────────────────────────────────
-    st.divider()
+    # ── SINGLE CAMPAIGN MODE ──────────────────────────────────────────────
+    else:
+        from agents.brand_research_agent import run_brand_research
+        from agents.campaign_strategy_agent import run_campaign_strategy
+        from agents.creative_execution_agent import run_creative_execution
 
-    if creative.status == "HALTED":
+        research_query = f"What brand facts, certifications, and approved claims support this campaign: {user_prompt}"
+
+        # ── AGENT 1 ───────────────────────────────────────────────────────────
+        with st.status("🔍 Researching brand facts...", expanded=True) as s1:
+            pipeline_status.markdown("**Step 1 of 3** — Brand Research")
+            t0 = time.time()
+            research = run_brand_research(
+                query=research_query,
+                include_poisoned=config["include_poisoned"],
+                simulate_low_confidence=config["simulate_low_confidence"],
+            )
+            t1 = time.time()
+
+            gs = research.grounding_score
+            score_class = "trust-high" if gs >= 0.70 else "trust-medium" if gs >= 0.50 else "trust-low"
+            score_label = "Strong" if gs >= 0.70 else "Moderate" if gs >= 0.50 else "Weak"
+
+            st.markdown(f"**Brand grounding:** <span class='{score_class}'>{score_label} ({gs:.2f})</span>", unsafe_allow_html=True)
+            st.markdown(f"{research.answer}")
+            st.caption(f"Sources: {', '.join(research.sources)} · {(t1-t0):.1f}s")
+
+            if config["include_poisoned"]:
+                st.error("🔴 Injection document detected in retrieval")
+            if config["simulate_low_confidence"] and gs < 0.6:
+                st.warning(f"⚠️ Low grounding ({gs:.2f}) — Agent 2 will not be informed in this scenario")
+
+            s1.update(label=f"✅ Brand research complete — grounding {gs:.2f}", state="complete", expanded=False)
+
+        with pipeline_status.container():
+            st.markdown("**Agent 1** ✅ Brand Research")
+            st.progress(0.33)
+
+        # ── AGENT 2 ───────────────────────────────────────────────────────────
+        with st.status("📣 Building campaign strategy...", expanded=True) as s2:
+            pipeline_status.markdown("**Step 2 of 3** — Campaign Strategy")
+            t2 = time.time()
+            strategy = run_campaign_strategy(
+                research=research,
+                campaign_brief=user_prompt,
+                trust_aware=config["trust_aware"],
+            )
+            t3 = time.time()
+
+            if strategy.hallucination_detected:
+                st.error("🚨 Prohibited claims detected in output — pipeline will halt at creative step")
+            elif not config["trust_aware"] and research.grounding_score < 0.65:
+                st.warning("⚠️ Strategy generated without grounding context — claims may be unsupported")
+            else:
+                st.success("✅ All claims validated against brand policy")
+
+            st.caption(f"{(t3-t2):.1f}s · {len(strategy.key_messages)} key messages · {len(strategy.risk_flags)} risk flags")
+
+            s2.update(
+                label=f"{'🚨 Strategy flagged — prohibited claims' if strategy.hallucination_detected else '✅ Campaign strategy ready'}",
+                state="error" if strategy.hallucination_detected else "complete",
+                expanded=False
+            )
+
+        with pipeline_status.container():
+            st.markdown("**Agent 1** ✅ Brand Research")
+            st.markdown("**Agent 2** ✅ Campaign Strategy")
+            st.progress(0.66)
+
+        # ── AGENT 3 ───────────────────────────────────────────────────────────
+        with st.status("🎬 Generating creative...", expanded=True) as s3:
+            pipeline_status.markdown("**Step 3 of 3** — Creative Execution")
+            t4 = time.time()
+            creative = run_creative_execution(strategy=strategy, brand_name="Verdant")
+            t5 = time.time()
+
+            if creative.status == "HALTED":
+                s3.update(label="🛑 Creative halted — trust gate fired", state="error", expanded=False)
+            else:
+                s3.update(label="✅ Creative package ready", state="complete", expanded=False)
+
+        with pipeline_status.container():
+            st.markdown("**Agent 1** ✅ Brand Research")
+            st.markdown("**Agent 2** ✅ Campaign Strategy")
+            if creative.status == "HALTED":
+                st.markdown("**Agent 3** 🛑 Halted")
+                st.progress(1.0)
+            else:
+                st.markdown("**Agent 3** ✅ Creative Execution")
+                st.progress(1.0)
+            st.caption(f"Total: {(t5-t0):.1f}s")
+            st.markdown(f"[View trace in Arize AX ↗]({arize_url})")
+
+    # ── Single-campaign results ───────────────────────────────────────────────
+    if num_campaigns == 1:
+        st.divider()
+
+    if num_campaigns == 1 and creative.status == "HALTED":
         st.markdown(f"""
         <div class='halted-card'>
             <div class='step-label'>Pipeline halted</div>
@@ -379,7 +560,7 @@ if run_btn and user_prompt.strip():
         for action, detail in actions:
             st.markdown(f"**{action}** — {detail}")
 
-    else:
+    elif num_campaigns == 1:
         # ── Campaign output ────────────────────────────────────────────────
 
         # Purpose + description at the top

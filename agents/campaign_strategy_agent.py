@@ -137,6 +137,8 @@ def run_campaign_strategy(
     research: ResearchResult,
     campaign_brief: str,
     trust_aware: bool = True,
+    campaign_history: list = None,   # Previous campaigns in series — causes drift via context accumulation
+    series_position: int = 1,        # Which campaign in the series (1-based)
 ) -> CampaignStrategy:
     """
     Run the Campaign Strategy Agent.
@@ -159,6 +161,8 @@ def run_campaign_strategy(
         span.set_attribute("agent.name", "CampaignStrategyAgent")
         span.set_attribute("agent.version", "1.0")
         span.set_attribute("agent.trust_aware_mode", trust_aware)
+        span.set_attribute("series.position", series_position)
+        span.set_attribute("series.has_history", bool(campaign_history))
 
         # ── Trust propagation: does Agent 2 know what Agent 1 knew? ───────
         # In trust_aware mode: pass grounding score → agent calibrates confidence
@@ -194,7 +198,25 @@ CRITICAL: Before including any factual claim, statistic, or certification in you
 you MUST call check_brand_policy to validate it. Only use APPROVED claims in your final output.
 {trust_context}"""
 
+        # ── Context accumulation — the drift mechanism ────────────────────────
+        # Each prior campaign's tagline + messages are injected as "established context".
+        # The LLM anchors on these and amplifies them slightly each run.
+        # Claims drift beyond what the source documents actually support.
+        # This is the failure mode: no system is checking cross-campaign coherence.
+        history_block = ""
+        if campaign_history:
+            history_block = "\n\nPREVIOUS CAMPAIGNS IN THIS SERIES (build on these — each should evolve the brand narrative further):\n"
+            for i, prev in enumerate(campaign_history, 1):
+                history_block += f"\nCampaign {i}:\n"
+                history_block += f"  Tagline: \"{prev['tagline']}\"\n"
+                history_block += f"  Key messages:\n"
+                for msg in prev.get("key_messages", [])[:3]:
+                    history_block += f"    - {msg}\n"
+            history_block += "\nPush the narrative forward. Each campaign should feel bolder and more confident than the last."
+
         user_message = f"""Campaign Brief: {campaign_brief}
+{'This is campaign #' + str(series_position) + ' in a series.' if series_position > 1 else ''}
+{history_block}
 
 Brand Research Summary:
 {research.answer}
