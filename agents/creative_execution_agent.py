@@ -181,10 +181,22 @@ Return only the video prompt, nothing else."""
 
                 if operation.done and operation.response.generated_videos:
                     generated_video = operation.response.generated_videos[0].video
-                    if hasattr(generated_video, 'uri'):
-                        video_url = generated_video.uri
-                    elif hasattr(generated_video, 'video_bytes'):
+
+                    # Prefer raw bytes; if only a URI is returned, download it
+                    if hasattr(generated_video, 'video_bytes') and generated_video.video_bytes:
                         video_bytes = generated_video.video_bytes
+                    elif hasattr(generated_video, 'uri') and generated_video.uri:
+                        uri = generated_video.uri
+                        # gs:// URIs need the SDK downloader; https:// can use urllib
+                        if uri.startswith("https://"):
+                            import urllib.request
+                            with urllib.request.urlopen(uri) as resp:
+                                video_bytes = resp.read()
+                        else:
+                            # Use google-genai files API to download
+                            dl = google_client.files.download(name=uri)
+                            video_bytes = dl if isinstance(dl, bytes) else dl.read()
+                        video_url = uri  # keep for span logging
 
                     veo_span.set_attribute("tool.status", "success")
                     veo_span.set_attribute(SpanAttributes.OUTPUT_VALUE, video_url or "video_bytes_generated")

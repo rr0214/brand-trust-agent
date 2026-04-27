@@ -3,6 +3,7 @@ Campaign Studio — Brand-safe campaign generation
 Three trust-aware AI agents · Instrumented with Arize AX
 """
 
+import io
 import os
 import time
 from dotenv import load_dotenv
@@ -401,10 +402,10 @@ if run_btn and user_prompt.strip():
         with col_left:
             # Video
             st.markdown("<div class='step-label'>Social Video</div>", unsafe_allow_html=True)
-            if creative.video_url:
+            if creative.video_bytes:
+                st.video(io.BytesIO(creative.video_bytes), format="video/mp4")
+            elif creative.video_url:
                 st.video(creative.video_url)
-            elif creative.video_bytes:
-                st.video(creative.video_bytes)
             else:
                 if creative.video_error:
                     st.warning(f"⚠️ Video generation failed: `{creative.video_error}`")
