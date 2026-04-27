@@ -187,15 +187,16 @@ Return only the video prompt, nothing else."""
                         video_bytes = generated_video.video_bytes
                     elif hasattr(generated_video, 'uri') and generated_video.uri:
                         uri = generated_video.uri
-                        # gs:// URIs need the SDK downloader; https:// can use urllib
-                        if uri.startswith("https://"):
-                            import urllib.request
-                            with urllib.request.urlopen(uri) as resp:
-                                video_bytes = resp.read()
-                        else:
-                            # Use google-genai files API to download
-                            dl = google_client.files.download(name=uri)
-                            video_bytes = dl if isinstance(dl, bytes) else dl.read()
+                        # Google API URIs require the API key for download
+                        import requests as _requests
+                        api_key = os.environ.get("GOOGLE_API_KEY", "")
+                        dl = _requests.get(
+                            uri,
+                            headers={"x-goog-api-key": api_key},
+                            timeout=30,
+                        )
+                        dl.raise_for_status()
+                        video_bytes = dl.content
                         video_url = uri  # keep for span logging
 
                     veo_span.set_attribute("tool.status", "success")
