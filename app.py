@@ -57,7 +57,10 @@ h1, h2, h3 { font-family: 'DM Sans', sans-serif; font-weight: 700; }
     line-height: 1;
 }
 
-section.main > div { max-width: 780px; margin: 0 auto; padding: 0 2rem; }
+section.main > div { max-width: 740px; margin: 0 auto; padding: 0 1.5rem; }
+/* tighten Streamlit's default widget spacing */
+div[data-testid="stVerticalBlock"] > div { gap: 0.5rem; }
+div[data-testid="stPills"] { margin-bottom: 0.25rem; }
 
 .main-header {
     padding: 2rem 0 1rem 0;
@@ -212,18 +215,14 @@ All steps are traced in **Arize AX** with full span visibility.
 # ---------------------------------------------------------------------------
 # Main area
 # ---------------------------------------------------------------------------
-st.markdown("<p style='font-family:DM Serif Display, serif; font-size:1.8rem; font-weight:400; color:#ff4b4b; text-align:center; margin:1.5rem 0 0 0;'>Campaign Studio</p>", unsafe_allow_html=True)
-st.markdown("<p style='font-size:1.15rem; color:#64748b; text-align:center; margin-top:8px; margin-bottom:2rem;'>Brand-safe social media campaign generation</p>", unsafe_allow_html=True)
+st.markdown("<p style='font-family:DM Serif Display, serif; font-size:1.8rem; font-weight:400; color:#ff4b4b; text-align:center; margin:1.5rem 0 0 0; line-height:1.1;'>Campaign Studio</p>", unsafe_allow_html=True)
+st.markdown("<p style='font-size:0.95rem; color:#94a3b8; text-align:center; margin-top:4px; margin-bottom:2rem;'>Brand-safe social media campaign generation</p>", unsafe_allow_html=True)
 
 st.divider()
 
 # ---------------------------------------------------------------------------
-# Campaign input — center stage
+# Campaign input
 # ---------------------------------------------------------------------------
-st.markdown("<h2 style='font-size:1.3rem; font-weight:700; margin-bottom:4px; text-align:center;'>What would you like to campaign about?</h2>", unsafe_allow_html=True)
-st.markdown("<p style='font-size:0.95rem; color:#64748b; margin-bottom:1.5rem; text-align:center;'>Describe the goal, audience, and angle. The agents will research brand facts, build the strategy, validate every claim, and generate a social video.</p>", unsafe_allow_html=True)
-
-# Example prompts — clickable
 EXAMPLES = [
     "Spring launch · Gen Z runners · recycled materials + trail performance",
     "Summer re-engagement · lapsed customers · sustainability values",
@@ -231,50 +230,32 @@ EXAMPLES = [
     "Holiday gifting · performance-conscious parents · sustainable options",
 ]
 
-st.markdown("**Start with an example**")
-selected_example = st.pills(
-    "Examples",
-    EXAMPLES,
-    label_visibility="collapsed",
-)
+selected_example = st.pills("Try an example", EXAMPLES)
 if selected_example:
     st.session_state["user_prompt"] = selected_example
 
 user_prompt = st.text_area(
-    "Campaign brief",
+    "What would you like to campaign about?",
     value=st.session_state.get("user_prompt", ""),
-    height=110,
-    placeholder="e.g. Spring collection launch targeting Gen Z runners — lead with our recycled materials story and performance credentials",
-    label_visibility="collapsed",
+    height=100,
+    placeholder="Describe your goal, audience, and angle — e.g. Spring launch targeting Gen Z runners, lead with our recycled materials story",
 )
 
-# ── Series configuration ─────────────────────────────────────────────────────
-st.markdown("<div style='margin-top:1.2rem;'></div>", unsafe_allow_html=True)
+# ── Series configuration ──────────────────────────────────────────────────
 col_series_l, col_series_r = st.columns(2)
-
 with col_series_l:
-    st.markdown("<div style='font-size:0.85rem; font-weight:600; color:#374151; margin-bottom:6px;'>NUMBER OF CAMPAIGNS</div>", unsafe_allow_html=True)
-    num_campaigns = st.pills(
-        "num", options=[1, 2, 3, 4, 5], default=1, label_visibility="collapsed"
-    )
+    num_campaigns = st.pills("Number of campaigns", options=[1, 2, 3, 4, 5], default=1)
     if num_campaigns is None:
         num_campaigns = 1
-
 with col_series_r:
-    st.markdown("<div style='font-size:0.85rem; font-weight:600; color:#374151; margin-bottom:6px;'>DROP SCHEDULE</div>", unsafe_allow_html=True)
-    schedule = st.pills(
-        "sched",
-        options=["Daily", "Weekly", "Every 2 weeks"],
-        default="Weekly",
-        label_visibility="collapsed",
-    )
+    schedule = st.pills("Drop schedule", options=["Daily", "Weekly", "Every 2 weeks"], default="Weekly")
     if schedule is None:
         schedule = "Weekly"
 
 SCHEDULE_DELTAS = {"Daily": timedelta(days=1), "Weekly": timedelta(weeks=1), "Every 2 weeks": timedelta(weeks=2)}
 
 btn_label = "▶  Generate Campaign" if num_campaigns == 1 else f"▶  Generate {num_campaigns}-Campaign Series"
-run_btn = st.button(btn_label, type="primary", use_container_width=False)
+run_btn = st.button(btn_label, type="primary")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -338,17 +319,62 @@ if run_btn and user_prompt.strip():
         series_status = st.empty()
 
         for i in range(num_campaigns):
+            from agents.brand_research_agent import run_brand_research
+            from agents.campaign_strategy_agent import run_campaign_strategy
+            from agents.creative_execution_agent import run_creative_execution
+
             series_status.info(f"Generating campaign {i+1} of {num_campaigns}…")
-            with st.status(f"📣 Campaign {i+1} — {drop_dates[i].strftime('%b %d')}", expanded=True) as s:
-                research, strategy, creative, (t0, t1, t2, t3) = run_single_campaign(
-                    user_prompt, config,
+            st.markdown(f"<div style='font-size:0.85rem; font-weight:700; color:#64748b; margin:1rem 0 4px 0; text-transform:uppercase; letter-spacing:0.05em;'>Campaign {i+1} · {drop_dates[i].strftime('%b %d, %Y')}</div>", unsafe_allow_html=True)
+
+            t0 = time.time()
+
+            # Step 1 — Research
+            with st.status("🔍 Researching brand facts...", expanded=True) as s1:
+                research_query = f"What brand facts, certifications, and approved claims support this campaign: {user_prompt}"
+                research = run_brand_research(
+                    query=research_query,
+                    include_poisoned=config["include_poisoned"],
+                    simulate_low_confidence=config["simulate_low_confidence"],
+                )
+                t1 = time.time()
+                gs = research.grounding_score
+                score_class = "trust-high" if gs >= 0.70 else "trust-medium" if gs >= 0.50 else "trust-low"
+                st.markdown(f"**Brand grounding:** <span class='{score_class}'>{gs:.2f}</span>", unsafe_allow_html=True)
+                if i > 0 and completed:
+                    prev_score = completed[-1]["research"].grounding_score
+                    if gs < prev_score - 0.05:
+                        st.warning(f"↓ Grounding dropped {prev_score:.2f} → {gs:.2f} — brand claims drifting from source docs")
+                s1.update(label=f"✅ Research complete — grounding {gs:.2f}", state="complete", expanded=False)
+
+            # Step 2 — Strategy
+            with st.status("📣 Building campaign strategy...", expanded=True) as s2:
+                strategy = run_campaign_strategy(
+                    research=research,
+                    campaign_brief=user_prompt,
+                    trust_aware=config["trust_aware"],
                     campaign_history=campaign_history if i > 0 else None,
                     series_position=i + 1,
                 )
-                if creative.status == "HALTED":
-                    s.update(label=f"🛑 Campaign {i+1} halted — trust gate fired ({drop_dates[i].strftime('%b %d')})", state="error", expanded=False)
+                t2 = time.time()
+                if strategy.hallucination_detected:
+                    st.error("🚨 Prohibited claims detected — pipeline will halt at creative step")
                 else:
-                    s.update(label=f"✅ Campaign {i+1} ready — drops {drop_dates[i].strftime('%b %d')} · trust {research.grounding_score:.2f}", state="complete", expanded=False)
+                    st.success("✅ Claims validated against brand policy")
+                st.caption(f"{len(strategy.key_messages)} key messages · {len(strategy.risk_flags)} risk flags · {t2-t1:.1f}s")
+                s2.update(
+                    label="🚨 Strategy flagged — prohibited claims" if strategy.hallucination_detected else "✅ Campaign strategy ready",
+                    state="error" if strategy.hallucination_detected else "complete",
+                    expanded=False,
+                )
+
+            # Step 3 — Creative
+            with st.status("🎬 Generating creative...", expanded=True) as s3:
+                creative = run_creative_execution(strategy=strategy, brand_name="Verdant")
+                t3 = time.time()
+                if creative.status == "HALTED":
+                    s3.update(label="🛑 Trust gate fired — no creative generated", state="error", expanded=False)
+                else:
+                    s3.update(label=f"✅ Creative ready · {t3-t2:.0f}s", state="complete", expanded=False)
 
             completed.append({
                 "n": i + 1,
