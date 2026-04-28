@@ -260,6 +260,10 @@ Provide a focused research summary that a campaign strategist can use directly."
         sources = list({c["doc_name"] for c in retrieved_chunks})
 
         span.set_attribute("output.value", answer)
+        span.set_attribute("trust.grounding_score", grounding_score)
+        span.set_attribute("trust.injection_risk", "high" if include_poisoned else "low")
+        span.set_attribute("trust.retrieval_quality", "low" if grounding_score < 0.6 else "high")
+        span.set_attribute("trust.n_chunks_retrieved", len(retrieved_chunks))
 
         return ResearchResult(
             query=query,
