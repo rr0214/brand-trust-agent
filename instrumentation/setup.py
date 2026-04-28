@@ -49,6 +49,10 @@ def setup_tracing():
         project_name="brand-trust-agent-auto",
     )
 
+    # CRITICAL: set as global so get_tracer() calls in agents use this provider
+    from opentelemetry import trace
+    trace.set_tracer_provider(tracer_provider)
+
     OpenAIInstrumentor().instrument(tracer_provider=tracer_provider)
 
     return tracer_provider
