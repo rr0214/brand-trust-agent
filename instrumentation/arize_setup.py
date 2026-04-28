@@ -52,8 +52,20 @@ def setup_arize_tracing() -> None:
         project_name="brand-trust-agent",
     )
 
+    # Explicitly set as global so manual spans (trace.get_tracer()) use this provider
+    from opentelemetry import trace
+    trace.set_tracer_provider(tracer_provider)
+
     # Auto-instrument all OpenAI SDK calls — every chat completion and embedding
     # will automatically create a span with input/output captured.
     OpenAIInstrumentor().instrument(tracer_provider=tracer_provider)
 
     return tracer_provider
+
+
+def flush_traces() -> None:
+    """Force-flush pending spans to Arize. Call after each pipeline run."""
+    from opentelemetry import trace
+    provider = trace.get_tracer_provider()
+    if hasattr(provider, "force_flush"):
+        provider.force_flush(timeout_millis=5000)
