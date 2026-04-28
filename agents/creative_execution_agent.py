@@ -10,12 +10,6 @@ TRUST GATE: If upstream trust signals indicate hallucination or critically low
 grounding, the pipeline halts before any creative assets are generated.
 This is the "take action" principle — not just flagging bad output, but
 refusing to produce creative assets from unverified brand claims.
-
-Arize AX trace structure:
-  creative-execution-agent (AGENT)
-    ├── prompt-engineering (LLM)       — builds brand-safe video prompt
-    ├── veo-video-generation (TOOL)    — generates 5s social video via Veo 2
-    └── caption-generation (LLM)      — writes social caption + hashtags
 """
 
 import os
@@ -26,10 +20,11 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from openai import OpenAI
-from opentelemetry import trace
-from openinference.semconv.trace import SpanAttributes
+from opentelemetry.trace import get_tracer
 
 from agents.campaign_strategy_agent import CampaignStrategy
+
+tracer = get_tracer("creative-execution-agent", "1.0.0")
 
 # Trust threshold — below this, pipeline halts, no creative generated
 CRITICAL_TRUST_THRESHOLD = 0.30
@@ -73,17 +68,11 @@ def run_creative_execution(
     Trust gate enforced first — if upstream signals are bad, halt immediately.
     Otherwise: build video prompt → generate Veo 2 video → write social caption.
     """
-    tracer = trace.get_tracer(__name__)
-    openai_client = OpenAI()
-
     with tracer.start_as_current_span("creative-execution-agent") as span:
-        span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "AGENT")
-        span.set_attribute("agent.name", "CreativeExecutionAgent")
-        span.set_attribute("agent.version", "1.0")
-        span.set_attribute("agent.upstream_agent", "CampaignStrategyAgent")
-        span.set_attribute("agent.upstream_span_id", strategy.span_id or "unknown")
-        span.set_attribute("trust.grounding_score_inherited", strategy.trust_score_inherited)
-        span.set_attribute("trust.hallucination_detected_upstream", strategy.hallucination_detected)
+        span.set_attribute("openinference.span.kind", "CHAIN")
+        span.set_attribute("input.value", strategy.campaign_concept)
+
+        openai_client = OpenAI()
 
         # ── TRUST GATE ────────────────────────────────────────────────────────
         if strategy.hallucination_detected:
@@ -92,9 +81,8 @@ def run_creative_execution(
                 "No creative assets will be generated from unverified content. "
                 "This prevents brand misrepresentation and potential legal liability."
             )
-            span.set_attribute("trust.pipeline_halted", True)
-            span.set_attribute("trust.halt_reason", "hallucination_detected")
-            return _halted_result(strategy, halt_reason, span)
+            span.set_attribute("output.value", "PIPELINE_HALTED: " + halt_reason)
+            return _halted_result(strategy, halt_reason)
 
         if strategy.trust_score_inherited < CRITICAL_TRUST_THRESHOLD:
             halt_reason = (
@@ -103,18 +91,11 @@ def run_creative_execution(
                 "Campaign strategy lacks sufficient brand evidence. "
                 "Expand retrieval corpus before proceeding to creative execution."
             )
-            span.set_attribute("trust.pipeline_halted", True)
-            span.set_attribute("trust.halt_reason", "critical_low_grounding")
-            return _halted_result(strategy, halt_reason, span)
-
-        span.set_attribute("trust.pipeline_halted", False)
+            span.set_attribute("output.value", "PIPELINE_HALTED: " + halt_reason)
+            return _halted_result(strategy, halt_reason)
 
         # ── PHASE 1: Build brand-safe video prompt ────────────────────────────
-        with tracer.start_as_current_span("prompt-engineering") as prompt_span:
-            prompt_span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "LLM")
-            prompt_span.set_attribute(SpanAttributes.LLM_MODEL_NAME, "gpt-4o-mini")
-
-            prompt_input = f"""You are a creative director for {brand_name}, a sustainable activewear brand.
+        prompt_input = f"""You are a creative director for {brand_name}, a sustainable activewear brand.
 
 Brand visual guidelines:
 {VERDANT_VISUAL_GUIDELINES}
@@ -132,17 +113,14 @@ Write a cinematic video prompt for a 5-second social media campaign video (max 1
 
 Return only the video prompt, nothing else."""
 
-            prompt_span.set_attribute(SpanAttributes.INPUT_VALUE, prompt_input)
+        prompt_response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt_input}],
+            temperature=0.6,
+            max_tokens=200,
+        )
 
-            prompt_response = openai_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt_input}],
-                temperature=0.6,
-                max_tokens=200,
-            )
-
-            video_prompt = prompt_response.choices[0].message.content.strip()
-            prompt_span.set_attribute(SpanAttributes.OUTPUT_VALUE, video_prompt)
+        video_prompt = prompt_response.choices[0].message.content.strip()
 
         # ── PHASE 2: Generate video with Veo 3.1 Lite ────────────────────────
         video_url = None
@@ -150,10 +128,8 @@ Return only the video prompt, nothing else."""
         veo_error = None
 
         with tracer.start_as_current_span("veo-video-generation") as veo_span:
-            veo_span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "TOOL")
-            veo_span.set_attribute("tool.name", "veo-3.1-lite-generate-preview")
-            veo_span.set_attribute("tool.duration_seconds", 5)
-            veo_span.set_attribute(SpanAttributes.INPUT_VALUE, video_prompt)
+            veo_span.set_attribute("openinference.span.kind", "TOOL")
+            veo_span.set_attribute("input.value", video_prompt)
 
             try:
                 from google import genai as google_genai
@@ -197,26 +173,18 @@ Return only the video prompt, nothing else."""
                         )
                         dl.raise_for_status()
                         video_bytes = dl.content
-                        video_url = uri  # keep for span logging
+                        video_url = uri
 
-                    veo_span.set_attribute("tool.status", "success")
-                    veo_span.set_attribute(SpanAttributes.OUTPUT_VALUE, video_url or "video_bytes_generated")
-                else:
-                    veo_span.set_attribute("tool.status", "timeout")
+                veo_span.set_attribute("output.value", video_url or "video_bytes_generated" if (video_url or video_bytes) else "no_video")
 
             except Exception as e:
-                veo_span.set_attribute("tool.status", "error")
-                veo_span.set_attribute("tool.error", str(e))
                 video_bytes = None
                 video_url = None
                 veo_error = str(e)
+                veo_span.set_attribute("output.value", f"error: {veo_error}")
 
         # ── PHASE 3: Generate social caption ─────────────────────────────────
-        with tracer.start_as_current_span("caption-generation") as caption_span:
-            caption_span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "LLM")
-            caption_span.set_attribute(SpanAttributes.LLM_MODEL_NAME, "gpt-4o-mini")
-
-            caption_input = f"""Write a social media caption for this campaign.
+        caption_input = f"""Write a social media caption for this campaign.
 
 Brand: {brand_name} — sustainable activewear
 Tagline: {strategy.tagline}
@@ -232,27 +200,20 @@ Requirements:
 
 Return caption then hashtags on separate line."""
 
-            caption_span.set_attribute(SpanAttributes.INPUT_VALUE, caption_input)
+        caption_response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": caption_input}],
+            temperature=0.5,
+            max_tokens=200,
+        )
 
-            caption_response = openai_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": caption_input}],
-                temperature=0.5,
-                max_tokens=200,
-            )
+        caption_raw = caption_response.choices[0].message.content.strip()
+        caption_parts = caption_raw.split("\n\n")
+        caption_text = caption_parts[0] if caption_parts else caption_raw
+        hashtag_line = caption_parts[1] if len(caption_parts) > 1 else ""
+        hashtags = [h.strip() for h in hashtag_line.split() if h.startswith("#")]
 
-            caption_raw = caption_response.choices[0].message.content.strip()
-            caption_parts = caption_raw.split("\n\n")
-            caption_text = caption_parts[0] if caption_parts else caption_raw
-            hashtag_line = caption_parts[1] if len(caption_parts) > 1 else ""
-            hashtags = [h.strip() for h in hashtag_line.split() if h.startswith("#")]
-
-            caption_span.set_attribute(SpanAttributes.OUTPUT_VALUE, caption_raw)
-
-        # ── Final span attributes ─────────────────────────────────────────────
-        span.set_attribute("trust.pipeline_completed", True)
-        span.set_attribute("creative.video_generated", video_url is not None or video_bytes is not None)
-        span.set_attribute("creative.model", "veo-3.1-lite-generate-preview")
+        span.set_attribute("output.value", caption_text or "")
 
         return CreativeResult(
             status="APPROVED",
@@ -266,12 +227,11 @@ Return caption then hashtags on separate line."""
             halt_reason=None,
             video_error=veo_error,
             trust_score_inherited=strategy.trust_score_inherited,
-            span_id=_get_span_id(span),
+            span_id=None,
         )
 
 
-def _halted_result(strategy, halt_reason, span) -> CreativeResult:
-    span.set_attribute(SpanAttributes.OUTPUT_VALUE, "PIPELINE_HALTED")
+def _halted_result(strategy, halt_reason) -> CreativeResult:
     return CreativeResult(
         status="HALTED",
         campaign_concept=strategy.campaign_concept,
@@ -284,10 +244,5 @@ def _halted_result(strategy, halt_reason, span) -> CreativeResult:
         halt_reason=halt_reason,
         video_error=None,
         trust_score_inherited=strategy.trust_score_inherited,
-        span_id=_get_span_id(span),
+        span_id=None,
     )
-
-
-def _get_span_id(span) -> Optional[str]:
-    ctx = span.get_span_context()
-    return format(ctx.span_id, "016x") if ctx else None

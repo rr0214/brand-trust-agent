@@ -19,8 +19,9 @@ from typing import Optional
 import chromadb
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 from openai import OpenAI
-from opentelemetry import trace
-from openinference.semconv.trace import SpanAttributes, OpenInferenceSpanKindValues
+from opentelemetry.trace import get_tracer
+
+tracer = get_tracer("brand-research-agent", "1.0.0")
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -34,7 +35,7 @@ class ResearchResult:
     retrieved_chunks: list[dict]      # [{text, doc_name, relevance_score}]
     grounding_score: float            # 0.0–1.0: how well docs support the answer
     confidence_metadata: dict = field(default_factory=dict)  # extra signals
-    span_id: Optional[str] = None     # Arize trace span ID for propagation
+    span_id: Optional[str] = None     # reserved for trace propagation
 
 
 # ---------------------------------------------------------------------------
@@ -172,71 +173,50 @@ def run_brand_research(
     Returns:
         ResearchResult with answer, sources, and grounding_score
     """
-    tracer = trace.get_tracer(__name__)
-    client = OpenAI()
-
-    # Use fewer results to simulate weak retrieval
-    effective_n = 1 if simulate_low_confidence else n_results
-
-    # ── Context accumulation: evolve the query with prior campaign claims ──
-    # As claims compound across runs, the query drifts further from source docs.
-    # Retrieval similarity drops → grounding score falls naturally.
-    evolved_query = query
-    if campaign_history:
-        prior_taglines = " → ".join(h["tagline"] for h in campaign_history)
-        prior_claims   = ". ".join(
-            msg for h in campaign_history for msg in h.get("key_messages", [])[:2]
-        )
-        evolved_query = (
-            f"{query}. "
-            f"This is a continuation of our campaign series. Previous campaigns established: {prior_taglines}. "
-            f"Find evidence that supports these evolving claims: {prior_claims}"
-        )
-
     with tracer.start_as_current_span("brand-research-agent") as span:
-        span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "AGENT")
-        span.set_attribute(SpanAttributes.INPUT_VALUE, evolved_query)
-        span.set_attribute("agent.name", "BrandResearchAgent")
-        span.set_attribute("agent.version", "1.0")
-        span.set_attribute("agent.mode.poisoned", include_poisoned)
-        span.set_attribute("series.position", series_position)
-        span.set_attribute("series.query_evolved", bool(campaign_history))
-        span.set_attribute("agent.mode.low_confidence", simulate_low_confidence)
+        span.set_attribute("openinference.span.kind", "CHAIN")
+        span.set_attribute("input.value", query)
+
+        client = OpenAI()
+
+        # Use fewer results to simulate weak retrieval
+        effective_n = 1 if simulate_low_confidence else n_results
+
+        # ── Context accumulation: evolve the query with prior campaign claims ──
+        # As claims compound across runs, the query drifts further from source docs.
+        # Retrieval similarity drops → grounding score falls naturally.
+        evolved_query = query
+        if campaign_history:
+            prior_taglines = " → ".join(h["tagline"] for h in campaign_history)
+            prior_claims   = ". ".join(
+                msg for h in campaign_history for msg in h.get("key_messages", [])[:2]
+            )
+            evolved_query = (
+                f"{query}. "
+                f"This is a continuation of our campaign series. Previous campaigns established: {prior_taglines}. "
+                f"Find evidence that supports these evolving claims: {prior_claims}"
+            )
 
         # ── Step 1: Retrieve relevant chunks ──────────────────────────────
-        with tracer.start_as_current_span("vector-retrieval") as retrieval_span:
-            retrieval_span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "RETRIEVER")
-            retrieval_span.set_attribute(SpanAttributes.INPUT_VALUE, evolved_query)
+        collection = _get_collection(include_poisoned=include_poisoned)
+        results = collection.query(
+            query_texts=[evolved_query],
+            n_results=min(effective_n, collection.count()),
+            include=["documents", "metadatas", "distances"],
+        )
 
-            collection = _get_collection(include_poisoned=include_poisoned)
-            results = collection.query(
-                query_texts=[evolved_query],
-                n_results=min(effective_n, collection.count()),
-                include=["documents", "metadatas", "distances"],
-            )
-
-            # ChromaDB returns L2 distances; convert to cosine-like similarity (0–1)
-            raw_distances = results["distances"][0] if results["distances"] else []
-            retrieved_chunks = []
-            for i, doc in enumerate(results["documents"][0]):
-                distance = raw_distances[i] if i < len(raw_distances) else 1.0
-                # Convert L2 distance to similarity score (approximate)
-                similarity = max(0.0, 1.0 - (distance / 2.0))
-                retrieved_chunks.append({
-                    "text": doc,
-                    "doc_name": results["metadatas"][0][i].get("source", "unknown"),
-                    "relevance_score": round(similarity, 3),
-                })
-
-            # Serialize retrieved docs for Arize trace (OpenInference RETRIEVER format)
-            retrieval_span.set_attribute(
-                SpanAttributes.RETRIEVAL_DOCUMENTS,
-                json.dumps([
-                    {"document": {"content": c["text"][:500]}, "score": c["relevance_score"]}
-                    for c in retrieved_chunks
-                ])
-            )
-            retrieval_span.set_attribute("retrieval.n_chunks", len(retrieved_chunks))
+        # ChromaDB returns L2 distances; convert to cosine-like similarity (0–1)
+        raw_distances = results["distances"][0] if results["distances"] else []
+        retrieved_chunks = []
+        for i, doc in enumerate(results["documents"][0]):
+            distance = raw_distances[i] if i < len(raw_distances) else 1.0
+            # Convert L2 distance to similarity score (approximate)
+            similarity = max(0.0, 1.0 - (distance / 2.0))
+            retrieved_chunks.append({
+                "text": doc,
+                "doc_name": results["metadatas"][0][i].get("source", "unknown"),
+                "relevance_score": round(similarity, 3),
+            })
 
         # ── Step 2: Generate research answer ──────────────────────────────
         context_text = "\n\n---\n\n".join(
@@ -256,27 +236,16 @@ Brand Documents (retrieved):
 
 Provide a focused research summary that a campaign strategist can use directly."""
 
-        with tracer.start_as_current_span("llm-synthesis") as llm_span:
-            llm_span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "LLM")
-            llm_span.set_attribute(SpanAttributes.INPUT_VALUE, user_message)
-            llm_span.set_attribute(SpanAttributes.LLM_MODEL_NAME, "gpt-4o-mini")
-
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
-                temperature=0.2,
-                max_tokens=600,
-            )
-            answer = response.choices[0].message.content
-
-            llm_span.set_attribute(SpanAttributes.OUTPUT_VALUE, answer)
-            llm_span.set_attribute(
-                SpanAttributes.LLM_TOKEN_COUNT_TOTAL,
-                response.usage.total_tokens if response.usage else 0
-            )
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.2,
+            max_tokens=600,
+        )
+        answer = response.choices[0].message.content
 
         # ── Step 3: Calculate grounding score ─────────────────────────────
         grounding_score = _calculate_grounding_score(answer, retrieved_chunks, n_results)
@@ -288,18 +257,9 @@ Provide a focused research summary that a campaign strategist can use directly."
             drift_penalty = sum(0.06 + (k * 0.01) for k in range(series_position - 1))
             grounding_score = round(max(0.10, grounding_score - drift_penalty), 3)
 
-        # Attach trust metadata to parent span — this is what Arize AX will show
-        # and what the product proposal argues should propagate to Agent 2's span
-        span.set_attribute(SpanAttributes.OUTPUT_VALUE, answer)
-        span.set_attribute("trust.grounding_score", grounding_score)
-        span.set_attribute("trust.n_chunks_retrieved", len(retrieved_chunks))
-        span.set_attribute("trust.retrieval_quality", "low" if grounding_score < 0.6 else "high")
-        span.set_attribute("trust.injection_risk", "high" if include_poisoned else "low")
-
-        span_ctx = span.get_span_context()
-        span_id = format(span_ctx.span_id, "016x") if span_ctx else None
-
         sources = list({c["doc_name"] for c in retrieved_chunks})
+
+        span.set_attribute("output.value", answer)
 
         return ResearchResult(
             query=query,
@@ -316,5 +276,5 @@ Provide a focused research summary that a campaign strategist can use directly."
                 "injection_risk": "high" if include_poisoned else "low",
                 "simulated_low_confidence": simulate_low_confidence,
             },
-            span_id=span_id,
+            span_id=None,
         )

@@ -10,6 +10,12 @@ from datetime import date, timedelta
 from dotenv import load_dotenv
 load_dotenv()
 
+# ---------------------------------------------------------------------------
+# Arize tracing — must run before any LLM client is created
+# ---------------------------------------------------------------------------
+from instrumentation.setup import setup_tracing
+setup_tracing()
+
 import streamlit as st
 
 # ---------------------------------------------------------------------------
@@ -21,20 +27,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-
-# ---------------------------------------------------------------------------
-# Arize tracing
-# ---------------------------------------------------------------------------
-@st.cache_resource
-def init_tracing():
-    try:
-        from instrumentation.arize_setup import setup_arize_tracing
-        setup_arize_tracing()
-        return True, None
-    except Exception as e:
-        return False, str(e)
-
-tracing_ok, tracing_error = init_tracing()
 
 # ---------------------------------------------------------------------------
 # Styling
@@ -172,18 +164,6 @@ with st.sidebar:
         }[failure_mode])
 
     st.markdown("---")
-    arize_space_id = os.environ.get("ARIZE_SPACE_ID", "")
-    arize_url = f"https://app.arize.com/organizations/{arize_space_id}" if arize_space_id else "https://app.arize.com"
-    st.markdown(f"[Open Arize AX ↗]({arize_url})")
-    st.caption("Projects → brand-trust-agent → Traces")
-    if tracing_ok:
-        st.success("Arize connected", icon="📡")
-    else:
-        st.warning("Arize offline — add API keys", icon="⚠️")
-        if tracing_error:
-            st.caption(f"Error: {tracing_error}")
-
-    st.markdown("---")
     with st.expander("📚 Brand document index", expanded=False):
         st.caption("The source documents Agent 1 searches. These are the ground truth for every brand claim.")
         docs = ["verdant_brand_guide.txt", "verdant_products.txt", "verdant_sustainability.txt"]
@@ -211,7 +191,6 @@ with st.sidebar:
 
 **The trust gate** prevents any creative content from being generated from unverified brand claims — not just flagged after the fact.
 
-All steps are traced in **Arize AX** with full span visibility.
         """)
 
 # ---------------------------------------------------------------------------
@@ -547,7 +526,7 @@ if run_btn and user_prompt.strip():
                 icon = "🛑" if c["creative"].status == "HALTED" else "✅"
                 st.markdown(f"**Campaign {c['n']}** {icon} {c['research'].grounding_score:.2f}")
             st.progress(1.0)
-            st.markdown(f"[View traces in Arize AX ↗]({arize_url})")
+            st.caption("Series complete")
 
     # ── SINGLE CAMPAIGN MODE ──────────────────────────────────────────────
     else:
@@ -640,7 +619,7 @@ if run_btn and user_prompt.strip():
                 st.markdown("**Agent 3** ✅ Creative Execution")
                 st.progress(1.0)
             st.caption(f"Total: {(t5-t0):.1f}s")
-            st.markdown(f"[View trace in Arize AX ↗]({arize_url})")
+            st.caption("Pipeline complete")
 
     # ── Single-campaign results ───────────────────────────────────────────────
     if num_campaigns == 1:
@@ -652,7 +631,7 @@ if run_btn and user_prompt.strip():
             <div class='step-label'>Pipeline halted</div>
             <h3 style='color:#7c3aed; margin:8px 0;'>🛑 Content generation stopped</h3>
             <p style='color:#4b5563;'>{creative.halt_reason}</p>
-            <p style='color:#94a3b8; font-size:0.85rem;'>No video or caption was generated. This is intentional — the trust gate prevents brand-unsafe content from being created, not just flagged after the fact. The halt event is fully recorded in Arize AX.</p>
+            <p style='color:#94a3b8; font-size:0.85rem;'>No video or caption was generated. This is intentional — the trust gate prevents brand-unsafe content from being created, not just flagged after the fact. The halt event is recorded.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -663,14 +642,14 @@ if run_btn and user_prompt.strip():
                 ("🛑 Do not publish", "Contains prohibited claims — do not deliver to any downstream system."),
                 ("👤 Escalate to brand safety team", "Flag for manual review within 1 business hour."),
                 ("🔒 Quarantine source document", "Remove flagged chunk from active index. Source: `verdant_poisoned.txt`."),
-                ("📋 Create audit record", f"Log span_id, injection_risk=HIGH, action=HALTED — required for EU AI Act Article 13."),
+                ("📋 Create audit record", f"Log injection_risk=HIGH, action=HALTED — required for EU AI Act Article 13."),
             ]
         else:
             actions = [
                 ("⚠️ Do not auto-publish", "Confidence too low — flag as LOW_CONFIDENCE before any use."),
                 ("🔄 Retry with expanded sources", "Increase retrieval top-k and run again."),
                 ("👤 Human review required", "Route to brand reviewer before any customer-facing use."),
-                ("📋 Create audit record", f"Log span_id, grounding_score=LOW, action=FLAGGED — required for SOC 2 CC7.2."),
+                ("📋 Create audit record", f"Log grounding_score=LOW, action=FLAGGED — required for SOC 2 CC7.2."),
             ]
         for action, detail in actions:
             st.markdown(f"**{action}** — {detail}")
@@ -741,7 +720,7 @@ if run_btn and user_prompt.strip():
 
         # Trust signals (collapsed)
         st.markdown("---")
-        with st.expander("🔬 Trust signals (Arize AX span attributes)", expanded=False):
+        with st.expander("🔬 Trust signals", expanded=False):
             c1, c2, c3 = st.columns(3)
             with c1:
                 st.markdown("**Agent 1**")
@@ -754,9 +733,7 @@ if run_btn and user_prompt.strip():
                 st.code(f"pipeline_halted: {creative.status == 'HALTED'}\nvideo_generated: {bool(creative.video_url or creative.video_bytes)}")
 
             if not config["trust_aware"]:
-                st.warning("⚠️ Trust gap visible: Agent 1's grounding score is in its span, but Agent 2 received no trust context. This is the gap Arize Sentinel closes.")
-
-        st.markdown(f"[View full trace in Arize AX ↗]({arize_url})")
+                st.warning("⚠️ Trust gap visible: Agent 1's grounding score exists but Agent 2 received no trust context.")
 
 elif run_btn and not user_prompt.strip():
     st.warning("Please describe your campaign before generating.")
@@ -765,4 +742,4 @@ elif run_btn and not user_prompt.strip():
 # Footer
 # ---------------------------------------------------------------------------
 st.divider()
-st.caption("Campaign Studio · Arize AX trust observability · Built by Rebecca Riggs · 2026")
+st.caption("Campaign Studio · Built by Rebecca Riggs · 2026")

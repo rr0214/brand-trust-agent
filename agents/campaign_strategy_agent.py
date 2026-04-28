@@ -8,8 +8,6 @@ The FAILURE MODE is demonstrated in two modes:
 
   - trust_aware=True  (default):  Agent 2 sees the grounding score and adjusts confidence.
                                    Low grounding → hedged, cautious campaign copy.
-                                   This is what SHOULD happen but currently Arize AX
-                                   doesn't natively propagate trust signals between agents.
 
   - trust_aware=False (demo mode): Agent 2 ignores the grounding score and generates
                                     confident campaign copy regardless — hallucinated claims
@@ -24,16 +22,16 @@ from dataclasses import dataclass
 from typing import Optional
 
 from openai import OpenAI
-from opentelemetry import trace
-from openinference.semconv.trace import SpanAttributes
+from opentelemetry.trace import get_tracer
 
 from agents.brand_research_agent import ResearchResult
+
+tracer = get_tracer("campaign-strategy-agent", "1.0.0")
 
 
 # ---------------------------------------------------------------------------
 # Brand Policy Tool — called by Agent 2 via OpenAI function calling
 # Validates claims against approved/prohibited brand guidelines before use.
-# Each call generates a TOOL span in Arize AX.
 # ---------------------------------------------------------------------------
 
 APPROVED_CLAIMS = {
@@ -81,7 +79,6 @@ def check_brand_policy(claim: str) -> dict:
     """
     Brand policy tool implementation.
     Called by Agent 2 via OpenAI function calling.
-    In Arize AX this generates a TOOL span — making the policy check fully observable.
     """
     claim_lower = claim.lower()
 
@@ -152,26 +149,13 @@ def run_campaign_strategy(
     Returns:
         CampaignStrategy with campaign copy and inherited trust metadata
     """
-    tracer = trace.get_tracer(__name__)
-    client = OpenAI()
-
     with tracer.start_as_current_span("campaign-strategy-agent") as span:
-        span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "AGENT")
-        span.set_attribute(SpanAttributes.INPUT_VALUE, campaign_brief)
-        span.set_attribute("agent.name", "CampaignStrategyAgent")
-        span.set_attribute("agent.version", "1.0")
-        span.set_attribute("agent.trust_aware_mode", trust_aware)
-        span.set_attribute("series.position", series_position)
-        span.set_attribute("series.has_history", bool(campaign_history))
+        span.set_attribute("openinference.span.kind", "CHAIN")
+        span.set_attribute("input.value", campaign_brief)
+
+        client = OpenAI()
 
         # ── Trust propagation: does Agent 2 know what Agent 1 knew? ───────
-        # In trust_aware mode: pass grounding score → agent calibrates confidence
-        # In blind mode: strip trust metadata → agent operates on raw text only
-        #
-        # THIS IS THE GAP. Arize AX currently shows both spans separately but
-        # does not natively link Agent 1's grounding score into Agent 2's context.
-        # The product proposal (Arize Sentinel / Trust Layer) fills this.
-
         if trust_aware:
             trust_context = f"""
 TRUST METADATA FROM RESEARCH AGENT:
@@ -199,10 +183,6 @@ you MUST call check_brand_policy to validate it. Only use APPROVED claims in you
 {trust_context}"""
 
         # ── Context accumulation — the drift mechanism ────────────────────────
-        # Each prior campaign's tagline + messages are injected as "established context".
-        # The LLM anchors on these and amplifies them slightly each run.
-        # Claims drift beyond what the source documents actually support.
-        # This is the failure mode: no system is checking cross-campaign coherence.
         history_block = ""
         if campaign_history:
             history_block = "\n\nPREVIOUS CAMPAIGNS IN THIS SERIES:\n"
@@ -212,9 +192,6 @@ you MUST call check_brand_policy to validate it. Only use APPROVED claims in you
                 history_block += f"  Key messages:\n"
                 for msg in prev.get("key_messages", [])[:3]:
                     history_block += f"    - {msg}\n"
-                # Inject performance feedback — this is the optimization trap
-                # High CTR + audience comments push the LLM to amplify successful angles,
-                # even when those angles are drifting beyond verified brand claims.
                 fb = prev.get("feedback")
                 if fb:
                     history_block += f"  Performance: {fb['ctr']}% CTR · {fb['engagement_rate']}% engagement · {fb['views']:,} views\n"
@@ -249,29 +226,16 @@ statistic before including it. Then return your final approved strategy as JSON:
         tool_call_results = []
 
         # ── Phase 1: LLM drafts strategy + calls brand policy tool ───────────
-        with tracer.start_as_current_span("llm-strategy-draft") as llm_span:
-            llm_span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "LLM")
-            llm_span.set_attribute(SpanAttributes.INPUT_VALUE, user_message)
-            llm_span.set_attribute(SpanAttributes.LLM_MODEL_NAME, "gpt-4o-mini")
+        draft_response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            tools=BRAND_POLICY_TOOLS,
+            tool_choice="auto",
+            temperature=0.4,
+            max_tokens=800,
+        )
 
-            if research.span_id:
-                llm_span.set_attribute("agent.upstream_span_id", research.span_id)
-                llm_span.set_attribute("agent.upstream_grounding_score", research.grounding_score)
-
-            draft_response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=messages,
-                tools=BRAND_POLICY_TOOLS,
-                tool_choice="auto",
-                temperature=0.4,
-                max_tokens=800,
-            )
-            llm_span.set_attribute(
-                SpanAttributes.LLM_TOKEN_COUNT_TOTAL,
-                draft_response.usage.total_tokens if draft_response.usage else 0
-            )
-
-        # ── Phase 2: Execute tool calls — each gets its own TOOL span ────────
+        # ── Phase 2: Execute tool calls — each gets a TOOL span ──────────
         assistant_message = draft_response.choices[0].message
         messages.append(assistant_message)
 
@@ -280,17 +244,12 @@ statistic before including it. Then return your final approved strategy as JSON:
                 args = json.loads(tool_call.function.arguments)
                 claim = args.get("claim", "")
 
-                with tracer.start_as_current_span("brand-policy-check") as tool_span:
-                    tool_span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "TOOL")
-                    tool_span.set_attribute("tool.name", "check_brand_policy")
-                    tool_span.set_attribute("tool.claim_checked", claim)
-
+                with tracer.start_as_current_span("check_brand_policy") as tool_span:
+                    tool_span.set_attribute("openinference.span.kind", "TOOL")
+                    tool_span.set_attribute("input.value", json.dumps(args))
                     result = check_brand_policy(claim)
                     tool_call_results.append(result)
-
-                    tool_span.set_attribute("tool.policy_status", result["status"])
-                    tool_span.set_attribute("tool.reason", result["reason"])
-                    tool_span.set_attribute(SpanAttributes.OUTPUT_VALUE, json.dumps(result))
+                    tool_span.set_attribute("output.value", json.dumps(result))
 
                 messages.append({
                     "role": "tool",
@@ -299,29 +258,20 @@ statistic before including it. Then return your final approved strategy as JSON:
                 })
 
         # ── Phase 3: Final LLM call — produce clean JSON with approved claims ─
-        with tracer.start_as_current_span("llm-strategy-finalize") as llm_span2:
-            llm_span2.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "LLM")
-            llm_span2.set_attribute(SpanAttributes.LLM_MODEL_NAME, "gpt-4o-mini")
+        messages.append({
+            "role": "user",
+            "content": "Now return the final approved campaign strategy as JSON only. Exclude any PROHIBITED claims."
+        })
 
-            messages.append({
-                "role": "user",
-                "content": "Now return the final approved campaign strategy as JSON only. Exclude any PROHIBITED claims."
-            })
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.3,
+            max_tokens=800,
+            response_format={"type": "json_object"},
+        )
 
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=messages,
-                temperature=0.3,
-                max_tokens=800,
-                response_format={"type": "json_object"},
-            )
-
-            raw_output = response.choices[0].message.content
-            llm_span2.set_attribute(SpanAttributes.OUTPUT_VALUE, raw_output)
-            llm_span2.set_attribute(
-                SpanAttributes.LLM_TOKEN_COUNT_TOTAL,
-                response.usage.total_tokens if response.usage else 0
-            )
+        raw_output = response.choices[0].message.content
 
         # ── Parse response ─────────────────────────────────────────────────
         try:
@@ -337,8 +287,6 @@ statistic before including it. Then return your final approved strategy as JSON:
             }
 
         # ── Post-hoc hallucination detection (heuristic) ──────────────────
-        # In production, Arize AX runs LLM-as-judge evals on the trace.
-        # Here we check for known false claims as a proxy.
         PROHIBITED_CLAIMS = [
             "carbon neutral", "carbon negative", "b corp certified",
             "100% sustainable", "100% fair trade", "all manufacturing is fair trade",
@@ -352,31 +300,7 @@ statistic before including it. Then return your final approved strategy as JSON:
 
         hallucination_detected = any(claim in all_text for claim in PROHIBITED_CLAIMS)
 
-        # Attach trust propagation attributes to this span
-        # This is what Arize AX will visualize — and what's MISSING in non-trust-aware mode
-        # Policy check summary
-        prohibited_caught = [r for r in tool_call_results if r["status"] == "PROHIBITED"]
-        unverified_caught = [r for r in tool_call_results if r["status"] == "UNVERIFIED"]
-
-        span.set_attribute(SpanAttributes.OUTPUT_VALUE, raw_output)
-        span.set_attribute("trust.grounding_score_inherited", research.grounding_score)
-        span.set_attribute("trust.trust_aware_mode", trust_aware)
-        span.set_attribute("trust.hallucination_detected", hallucination_detected)
-        span.set_attribute("trust.upstream_agent", "BrandResearchAgent")
-        span.set_attribute("trust.upstream_span_id", research.span_id or "unknown")
-        span.set_attribute("policy.tool_calls_made", len(tool_call_results))
-        span.set_attribute("policy.prohibited_claims_caught", len(prohibited_caught))
-        span.set_attribute("policy.unverified_claims_caught", len(unverified_caught))
-
-        if not trust_aware and research.grounding_score < 0.65:
-            span.set_attribute("trust.risk_level", "HIGH — low grounding score not propagated")
-        elif research.confidence_metadata.get("injection_risk") == "high":
-            span.set_attribute("trust.risk_level", "HIGH — injection risk not propagated")
-        else:
-            span.set_attribute("trust.risk_level", "LOW")
-
-        span_ctx = span.get_span_context()
-        span_id = format(span_ctx.span_id, "016x") if span_ctx else None
+        span.set_attribute("output.value", raw_output)
 
         return CampaignStrategy(
             research_query=research.query,
@@ -388,5 +312,5 @@ statistic before including it. Then return your final approved strategy as JSON:
             trust_score_inherited=research.grounding_score,
             trust_aware_mode=trust_aware,
             hallucination_detected=hallucination_detected,
-            span_id=span_id,
+            span_id=None,
         )
