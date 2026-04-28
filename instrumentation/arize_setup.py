@@ -49,8 +49,7 @@ def setup_arize_tracing() -> None:
     tracer_provider = register(
         space_id=space_id,
         api_key=api_key,
-        model_id="brand-trust-agent",
-        model_version="1.0",
+        project_name="brand-trust-agent",
     )
 
     # Auto-instrument all OpenAI SDK calls — every chat completion and embedding

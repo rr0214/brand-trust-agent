@@ -239,6 +239,8 @@ def run_brand_research(
             retrieval_span.set_attribute("retrieval.n_chunks", len(retrieved_chunks))
 
         # ── Step 2: Generate research answer ──────────────────────────────
+        # Note: OpenAIInstrumentor auto-creates the LLM span for this call.
+        # We keep the parent AGENT span for governance attributes (grounding_score, injection_risk).
         context_text = "\n\n---\n\n".join(
             f"[Source: {c['doc_name']}]\n{c['text']}" for c in retrieved_chunks
         )
@@ -256,27 +258,16 @@ Brand Documents (retrieved):
 
 Provide a focused research summary that a campaign strategist can use directly."""
 
-        with tracer.start_as_current_span("llm-synthesis") as llm_span:
-            llm_span.set_attribute(SpanAttributes.OPENINFERENCE_SPAN_KIND, "LLM")
-            llm_span.set_attribute(SpanAttributes.INPUT_VALUE, user_message)
-            llm_span.set_attribute(SpanAttributes.LLM_MODEL_NAME, "gpt-4o-mini")
-
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
-                temperature=0.2,
-                max_tokens=600,
-            )
-            answer = response.choices[0].message.content
-
-            llm_span.set_attribute(SpanAttributes.OUTPUT_VALUE, answer)
-            llm_span.set_attribute(
-                SpanAttributes.LLM_TOKEN_COUNT_TOTAL,
-                response.usage.total_tokens if response.usage else 0
-            )
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.2,
+            max_tokens=600,
+        )
+        answer = response.choices[0].message.content
 
         # ── Step 3: Calculate grounding score ─────────────────────────────
         grounding_score = _calculate_grounding_score(answer, retrieved_chunks, n_results)
