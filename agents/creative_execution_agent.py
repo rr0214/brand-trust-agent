@@ -96,7 +96,7 @@ def run_creative_execution(
             span.set_attribute("trust.halt_reason", "hallucination_detected")
             return _halted_result(strategy, halt_reason, span)
 
-        if strategy.trust_score_inherited < CRITICAL_TRUST_THRESHOLD:
+        if strategy.trust_score_inherited < CRITICAL_TRUST_THRESHOLD:.65
             halt_reason = (
                 f"Pipeline halted: grounding score ({strategy.trust_score_inherited:.2f}) "
                 f"below critical threshold ({CRITICAL_TRUST_THRESHOLD}). "
