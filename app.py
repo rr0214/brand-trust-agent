@@ -180,6 +180,8 @@ with st.sidebar:
         st.success("Arize connected", icon="📡")
     else:
         st.warning("Arize offline — add API keys", icon="⚠️")
+        if tracing_error:
+            st.caption(f"Error: {tracing_error}")
 
     st.markdown("---")
     with st.expander("📚 Brand document index", expanded=False):
