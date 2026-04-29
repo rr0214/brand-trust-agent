@@ -59,6 +59,7 @@ this step never runs — content is **blocked, not just flagged**.
 
 All steps are traced in **Arize AX** with full span visibility.
 """)
+st.markdown(""" 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');
 
