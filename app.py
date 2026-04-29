@@ -13,7 +13,7 @@ load_dotenv()
 import streamlit as st
 
 # ---------------------------------------------------------------------------
-# Page config
+#  Page config
 # ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="Campaign Studio",
