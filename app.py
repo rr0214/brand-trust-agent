@@ -40,6 +40,25 @@ tracing_ok, tracing_error = init_tracing()
 # Styling
 # ---------------------------------------------------------------------------
 st.markdown("""
+**Three agents run in sequence:**
+
+1. **Research** — searches 3 Verdant brand documents and scores how well
+the answer is backed by real sources (grounding score 0–1).
+🟢 0.70+ strong · 🟡 0.50–0.69 moderate · 🔴 below 0.50 weak.
+Score below 0.65 = pipeline stops here.
+
+2. **Strategy** — builds the campaign concept and calls `check_brand_policy()`
+on every factual claim. Claims like *"carbon neutral"* or *"B Corp certified"*
+are explicitly prohibited and blocked. Only verified stats make it through.
+
+3. **Creative** — only runs if every claim passed the brand policy check
+and no prohibited language was detected. If anything upstream failed,
+this step never runs — content is **blocked, not just flagged**.
+
+**The trust gate** is a hard stop between Strategy and Creative, not a review queue.
+
+All steps are traced in **Arize AX** with full span visibility.
+""")
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap');
 
