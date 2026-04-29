@@ -32,7 +32,7 @@ from openinference.semconv.trace import SpanAttributes
 from agents.campaign_strategy_agent import CampaignStrategy
 
 # Trust threshold — below this, pipeline halts, no creative generated
-CRITICAL_TRUST_THRESHOLD = 0.30
+CRITICAL_TRUST_THRESHOLD = 0.65
 
 # Verdant brand visual guidelines
 VERDANT_VISUAL_GUIDELINES = """
@@ -96,7 +96,7 @@ def run_creative_execution(
             span.set_attribute("trust.halt_reason", "hallucination_detected")
             return _halted_result(strategy, halt_reason, span)
 
-        if strategy.trust_score_inherited < CRITICAL_TRUST_THRESHOLD:.65
+        if strategy.trust_score_inherited < CRITICAL_TRUST_THRESHOLD:
             halt_reason = (
                 f"Pipeline halted: grounding score ({strategy.trust_score_inherited:.2f}) "
                 f"below critical threshold ({CRITICAL_TRUST_THRESHOLD}). "
