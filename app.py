@@ -745,7 +745,7 @@ elif run_btn and not user_prompt.strip():
 # Footer
 # ---------------------------------------------------------------------------
 st.divider()
-st.caption("Campaign Studio · Arize AX trust observability · Built by Rebecca Riggs · 2026")tracing_ok, tracing_error = init_tracing()
+st.caption("Campaign Studio · Arize AX trust observability · Built by Rebecca Riggs · 2026")
 
 # ---------------------------------------------------------------------------
 # Styling
