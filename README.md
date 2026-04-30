@@ -1,8 +1,8 @@
 # Brand Trust Agent
 
 A three-agent pipeline for brand-safe campaign generation, instrumented with **Arize AX**.
-Built as a real creative tool with full multi-agent trust observability — and failure mode toggles
-to demonstrate the product proposal for Arize Sentinel (Multi-Agent Trust).
+Built for Verdant, a sustainable activewear brand, as a demonstration of multi-agent
+observability and trust signal propagation.
 
 ## Architecture
 
@@ -10,23 +10,40 @@ to demonstrate the product proposal for Arize Sentinel (Multi-Agent Trust).
 
 ## What It Does
 
-| Agent | Role | Arize spans |
+| Agent | Role | Arize Spans |
 |-------|------|-------------|
-| **Agent 1: Brand Research** | RAG over Verdant brand docs → grounding score + injection risk | `RETRIEVER` + `LLM` |
-| **Agent 2: Campaign Strategy** | Generates campaign from research · validates every claim via `check_brand_policy()` tool | `AGENT` → `LLM` → `TOOL` → `LLM` |
-| **Agent 3: Creative Execution** | Trust gate → GPT-4o-mini video prompt → Veo 2 social video → caption + hashtags | `AGENT` → `LLM` → `TOOL` (Veo) → `LLM` |
+| **Agent 1: Brand Research** | RAG over Verdant brand docs via ChromaDB. Returns a grounding score (0–1) based on retrieval quality. | `RETRIEVER` + `LLM` |
+| **Agent 2: Campaign Strategy** | Builds campaign strategy from research. Validates every factual claim via `check_brand_policy()` tool call. | `AGENT` → `LLM` → `TOOL` → `LLM` |
+| **Agent 3: Creative Execution** | Generates caption, hashtags, and Veo video prompt. Only runs if trust gate passes. | `AGENT` → `LLM` → `TOOL` (Veo) → `LLM` |
 
-**Trust gate:** Agent 3 halts the pipeline if `hallucination_detected=True` or `grounding_score < 0.30`.
-No creative assets are generated from unverified brand content.
+**Trust gate:** The pipeline halts before Agent 3 if `grounding_score < 0.65` or `hallucination_detected = True`. Content is blocked, not just flagged.
 
-## Demo Scenarios (via sidebar toggle)
+## The Drift Experiment
 
-1. ✅ **Normal** — clean run, all three agents complete, creative package delivered
-2. ⚠️ **Trust Propagation Failure** — weak retrieval, Agent 2 operates blind, Agent 3 may halt
-3. 🔴 **Prompt Injection** — adversarial doc hijacks Agent 2 output, Agent 3 trust gate fires
-4. 🛡️ **Trust-Aware Mode** — grounding score + injection risk propagate end-to-end; the fix
+The app supports a multi-campaign series mode that simulates a real autonomous content calendar running week over week.
 
-All runs stream traces to **Arize AX** → Projects → `brand-trust-agent` → Traces.
+Each cycle, audience engagement data (CTR, comments) from the previous campaign is fed into the next brief. When CTR is high, the agent leans into what resonated with the audience — but audience comments often contain unverified projections ("carbon neutral," "B Corp certified") that gradually pull the strategy beyond what brand documents support.
+
+**What happens across 5 cycles:**
+
+| Cycle | Grounding | CTR | Signal |
+|-------|-----------|-----|--------|
+| 1 | 0.89 | 3.4% | Baseline — verified claims only |
+| 2 | 0.83 | 4.1% | Audience asks about carbon neutrality |
+| 3 | 0.76 | 4.7% | Audience assumes carbon neutral |
+| 4 | 0.69 | 5.2% | Model fabricates material composition not in brand docs |
+| 5 | 0.60 | — | Trust gate fires. Pipeline halted. |
+
+CTR rose 53% while grounding fell 33%. Standard engagement monitoring sees only rising performance — the brand risk is invisible without grounding score tracking.
+
+## Demo Scenarios
+
+Use the sidebar toggle to switch between scenarios:
+
+1. ✅ **Normal run** — all three agents complete, creative package delivered
+2. ⚠️ **Trust gap (silent failure)** — weak retrieval, Agent 2 operates without grounding context
+3. 🔴 **Prompt injection** — adversarial document hijacks Agent 2 output
+4. 🛡️ **Trust-aware mode (the fix)** — grounding score and injection risk propagate end-to-end
 
 ## Setup
 
@@ -40,19 +57,21 @@ pip install -r requirements.txt
 
 ### 2. Configure credentials
 
-```bash
-cp .env.example .env
-# Edit .env with your API keys
+Create `.streamlit/secrets.toml`:
+
+```toml
+OPENAI_API_KEY = "sk-..."
+GOOGLE_API_KEY = "..."        # For Veo video generation (optional)
+ARIZE_API_KEY = "..."
+ARIZE_SPACE_ID = "..."
 ```
 
 You need:
 - **OpenAI API key** — [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-- **Google API key** — [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) (for Veo 2 video generation)
 - **Arize AX Space ID + API Key** — [app.arize.com](https://app.arize.com) → Settings → API Keys
+- **Google API key** — [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) *(optional — video generation only)*
 
-> **Note:** The app runs without a Google API key — Agent 3 will generate the Veo 2 video prompt
-> but skip actual video generation. All trust gate logic, span attributes, and caption generation
-> still work.
+> The app runs fully without a Google API key. Agent 3 will generate the video prompt but skip video generation. All trust gate logic, tracing, and caption generation still work.
 
 ### 3. Run
 
@@ -62,72 +81,61 @@ streamlit run app.py
 
 Open [http://localhost:8501](http://localhost:8501)
 
-### 4. Run evaluations
-
-```bash
-python -m evals.run_evals --samples 5
-# Upload eval_results.csv to Arize AX: Datasets → + New Dataset
-```
-
 ## Project Structure
 
 ```
 brand-trust-agent/
-├── app.py                              # Streamlit frontend (primary campaign tool)
+├── app.py                              # Streamlit entry point. Tracing initialized here.
 ├── agents/
-│   ├── brand_research_agent.py         # Agent 1: RAG + grounding score + injection detection
+│   ├── brand_research_agent.py         # Agent 1: ChromaDB RAG + grounding score
 │   ├── campaign_strategy_agent.py      # Agent 2: Strategy + brand policy tool calls
-│   └── creative_execution_agent.py     # Agent 3: Trust gate + Veo 2 + caption
-├── data/
-│   ├── brand_docs/
-│   │   ├── verdant_brand_guide.txt
-│   │   ├── verdant_products.txt
-│   │   ├── verdant_sustainability.txt
-│   │   └── verdant_poisoned.txt        # Injection demo document
-│   └── golden_dataset.csv              # 20-row eval dataset
-├── evals/
-│   └── run_evals.py                    # Arize AX eval runner
+│   └── creative_execution_agent.py     # Agent 3: Trust gate + Veo prompt + caption
 ├── instrumentation/
-│   └── arize_setup.py                  # Arize OTel registration
-├── architecture.svg                    # Pipeline architecture diagram
-├── requirements.txt
-└── .env.example
+│   └── arize_setup.py                  # Arize OTel setup. Pure instrumentation — no agent logic.
+├── data/
+│   └── brand_docs/
+│       ├── verdant_brand_guide.txt
+│       ├── verdant_products.txt
+│       ├── verdant_sustainability.txt
+│       └── verdant_poisoned.txt        # Prompt injection demo document
+├── evals/                              # Eval datasets and scripts
+├── architecture.svg
+└── requirements.txt
 ```
 
 ## Arize AX Workflows
 
-### Observability
-1. Run the app and trigger each scenario from the sidebar Demo Mode toggle
-2. Open **Arize AX → Projects → brand-trust-agent → Traces**
-3. Use **Agent Visibility** to see the 3-agent flow as a flowchart
-4. Inspect custom span attributes: `trust.grounding_score`, `trust.injection_risk`, `trust.pipeline_halted`
-5. Note the gap: Agent 1's trust signals are not natively propagated to Agent 2's context
-
 ### Development
-1. Run `evals/run_evals.py` → generates `eval_results.csv`
-2. Upload to Arize AX → **Datasets → + New Dataset**
-3. Open **Prompt Playground** — experiment with system prompts for each agent
-4. Run **LLM Evals**: hallucination eval + brand safety eval on the dataset
+1. Run the 5-campaign series in the app to generate drift data
+2. Export the dataset (cycle, grounding score, caption, audience feedback)
+3. Upload to **Arize AX → Datasets → + New Dataset**
+4. Open **Prompt Playground** → select Hallucination template
+5. Map `{input}` → brand facts reference, `{output}` → generated caption
+6. Set the judge prompt as a **system prompt** (not user prompt) for accurate results
+7. Run evals — compare results across cycles to see grounding decline
 
-## Product Proposal Context
+### Production Observability
+1. Run the app and trigger campaigns from the UI
+2. Open **Arize AX → Projects → brand-trust-agent → Traces**
+3. Inspect the `vector-retrieval` span to see the evolved query and retrieved chunks
+4. Check custom span attributes: `trust.grounding_score`, `trust.injection_risk`, `trust.hallucination_detected`
+5. Use **Agent Graph** view to see the 3-agent flow and where the pipeline halted
 
-This demo supports the **Arize Sentinel (Multi-Agent Trust)** feature proposal.
+## Key Finding
 
-**The core observation:** Arize AX today shows all three agent spans but does not natively:
-- Propagate confidence/grounding scores between agents
-- Detect prompt injection patterns in retrieved context at trace time
-- Alert in real-time when upstream trust signals drop below threshold
-- Recommend actions when trust policies are violated (prescriptive governance)
+The standard Arize hallucination eval template (user prompt) missed a fabricated material composition claim in Cycle 4 because it checks semantic similarity, not specific numerical facts. Moving the judge prompt to the **system role** fixed this — a meaningful product insight for eval template design.
 
-**The proposal** adds a **Trust Layer** between agents — making trust signals first-class
-trace attributes that flow automatically through multi-agent pipelines, turning Arize
-from an "observe and react" tool into a "prevent and enforce" platform.
+## Product Proposal: Sentinel
 
-Four pillars:
-1. **Trust Signal Propagation** — grounding score, injection risk flow agent-to-agent
-2. **Real-time Trust Alerts** — threshold-based alerting, not post-hoc
-3. **Agent Lineage Graph** — visual trust propagation across agent graph
-4. **Prescriptive Governance** — recommended actions mapped to compliance frameworks (SOC 2, EU AI Act, NIST AI RMF)
+This project supports a product proposal for cross-run drift detection in Arize AX.
+
+The core gap: individual traces show a grounding score. But there is no cross-run alert when that score degrades over time. By Cycle 4, the grounding score had fallen from 0.89 to 0.69 across four weeks — invisible without trend monitoring.
+
+**Proposed features:**
+- **Drift threshold monitor** — alert when a tracked metric drops more than X% between consecutive runs
+- **Session-linked traces** — group traces from the same content series for trend visibility
+- **Trace diff view** — side-by-side comparison of two runs showing attribute changes
+- **Email/webhook alert** — notify before the next run executes
 
 ---
 Built by Rebecca Riggs · 2026
