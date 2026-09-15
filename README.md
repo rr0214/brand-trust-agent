@@ -34,7 +34,7 @@ Each cycle, audience engagement data (CTR, comments) from the previous campaign 
 | 4 | 0.72 | 5.2% | Model fabricates material composition not in brand docs |
 | 5 | 0.60 | — | Trust gate fires. Pipeline halted. |
 
-CTR rose 53% while grounding fell 33%. Standard engagement monitoring sees only rising performance — the brand risk is invisible without grounding score tracking.
+Simulated drift experiment across 5 cycles: as engagement metrics rose, grounding score fell. The point is that standard engagement monitoring can't see brand risk — synthetic data, designed to demonstrate the failure mode.
 
 ## Demo Scenarios
 
