@@ -1,4 +1,4 @@
-# Campaign Studio
+# Brand Trust Agent
 
 A three-agent pipeline for brand-safe campaign generation, instrumented with **Arize AX**.
 Built for Verdant, a sustainable activewear brand, as a demonstration of multi-agent
